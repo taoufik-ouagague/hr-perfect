@@ -221,14 +221,6 @@ class HRController extends GetxController {
       _logger.i('   Departement: ${departement.value}');
       _logger.i('   Token saved to SharedPreferences: ${userToken.value}');
       
-      Get.snackbar(
-        'Succès', 
-        'Connexion réussie', 
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-        colorText: const Color(0xFF2E7D32),
-        duration: const Duration(seconds: 2),
-      );
       return true;
     } catch (e, stackTrace) {
       _logger.e('❌ Authentication failed: $e', error: e, stackTrace: stackTrace);
