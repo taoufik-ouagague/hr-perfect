@@ -35,6 +35,39 @@ class TopWaveClipper extends CustomClipper<Path> {
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
 
+// Sticky Header Delegate
+class StickyFilterDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double height;
+
+  StickyFilterDelegate({required this.child, required this.height});
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      padding: const EdgeInsets.only(top: 8),
+
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(StickyFilterDelegate oldDelegate) {
+    return child != oldDelegate.child || height != oldDelegate.height;
+  }
+}
+
 IconData requestTypeIconByKey(String typeKey) {
   switch (typeKey.toLowerCase()) {
     case 'conge':
@@ -276,10 +309,13 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
   List<RequestModel> get _visible {
     Iterable<RequestModel> list = requests;
     if (_typeFilter != null) {
-  list = list.where(
-    (r) => r.type.toLowerCase() == _typeFilter!.toLowerCase(),
-  );
-}
+      list = list.where(
+        (r) => r.type.toLowerCase() == _typeFilter!.toLowerCase(),
+      );
+    }
+    if (_statusFilter != null) {
+      list = list.where((r) => r.status == _statusFilter);
+    }
     if (_q.isNotEmpty) {
       list = list.where((r) {
         final hay = '${r.title} ${r.reason} ${r.type}'.toLowerCase();
@@ -355,68 +391,97 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
           SafeArea(
             child: FadeTransition(
               opacity: _fadeAnimation,
-              child: Column(
-                children: [
-                  _buildAppBar(),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+              child: RefreshIndicator(
+                onRefresh: _fetchRequests,
+                color: const Color(0xFF00C6FF),
+                backgroundColor: Colors.white,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    // App Bar
+                    SliverToBoxAdapter(child: _buildAppBar()),
+
+                    // Header Stats
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: _buildHeaderStats(
+                          total: total,
+                          pending: pending,
+                          approved: approved,
+                          rejected: rejected,
+                        ),
+                      ),
                     ),
-                    child: _buildHeaderStats(
-                      total: total,
-                      pending: pending,
-                      approved: approved,
-                      rejected: rejected,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildSearchBar(),
-                  const SizedBox(height: 12),
-                  _buildStatusFilters(),
-                  const SizedBox(height: 12),
-                  _buildTypeFilters(),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: _isLoading
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Color(0xFF00C6FF),
-                                  ),
-                                  strokeWidth: 3,
+
+                    SliverToBoxAdapter(child: const SizedBox(height: 16)),
+
+                    // Sticky Filters Section
+                    SliverPersistentHeader(
+  pinned: true,
+  delegate: StickyFilterDelegate(
+    height: 185, // Increased from 180 to 185
+    child: Column(
+      children: [
+        // Search Bar
+        _buildSearchBar(),
+        const SizedBox(height: 12),
+        // Status Filters
+        _buildStatusFilters(),
+        const SizedBox(height: 12),
+        // Type Filters
+        _buildTypeFilters(),
+        const SizedBox(height: 12), // Reduced from 16 to 12
+      ],
+    ),
+  ),
+),
+
+
+                    // Content
+                    if (_isLoading)
+                      SliverFillRemaining(
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF00C6FF),
                                 ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Chargement des demandes...',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                strokeWidth: 3,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Chargement des demandes...',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
                                 ),
-                              ],
-                            ),
-                          )
-                        : visible.isEmpty
-                        ? _buildEmptyState()
-                        : RefreshIndicator(
-                            onRefresh: _fetchRequests,
-                            color: const Color(0xFF00C6FF),
-                            backgroundColor: Colors.white,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              itemCount: visible.length,
-                              itemBuilder: (context, index) =>
-                                  _buildCard(visible[index], index),
-                            ),
+                              ),
+                            ],
                           ),
-                  ),
-                ],
+                        ),
+                      )
+                    else if (visible.isEmpty)
+                      SliverFillRemaining(child: _buildEmptyState())
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) =>
+                                _buildCard(visible[index], index),
+                            childCount: visible.length,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
