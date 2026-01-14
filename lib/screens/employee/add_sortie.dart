@@ -1,13 +1,9 @@
-import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
-import 'package:hr_perfect/services/api_service.dart';
 import 'package:hr_perfect/widgets/app_text_field.dart';
-import 'package:http/http.dart' as http;
-import 'package:logger/logger.dart';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hr_perfect/controllers/sortie_controller.dart';
 
 class AddSortiePage extends StatefulWidget {
   const AddSortiePage({super.key});
@@ -22,17 +18,17 @@ class _AddSortiePageState extends State<AddSortiePage>
   final _motifController = TextEditingController();
   final _dateSortieController = TextEditingController();
 
+  // Use GetX controller (make sure it's registered in bindings/routes or put it here)
+  final SortieController sortieController = Get.put(SortieController());
+
   DateTime? _dateSortie;
   TimeOfDay? _heureDebut;
   TimeOfDay? _heureFin;
-  bool _submitting = false;
+
   String? _responseMessage;
   Color? _responseColor;
   IconData? _responseIcon;
 
-  final Logger _logger = Logger();
-
-  // Animation controller
   AnimationController? _animationController;
   Animation<double>? _fadeAnimation;
 
@@ -40,10 +36,14 @@ class _AddSortiePageState extends State<AddSortiePage>
   void initState() {
     super.initState();
     _initAnimations();
+
     final now = DateTime.now();
     _dateSortie = now;
     _heureDebut = TimeOfDay.now();
-    _heureFin = TimeOfDay(hour: now.hour + 2, minute: now.minute);
+
+    final fin = now.add(const Duration(hours: 2));
+    _heureFin = TimeOfDay.fromDateTime(fin);
+
     _dateSortieController.text = _formatDate(_dateSortie!);
   }
 
@@ -52,12 +52,10 @@ class _AddSortiePageState extends State<AddSortiePage>
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-
     _fadeAnimation = CurvedAnimation(
       parent: _animationController!,
       curve: Curves.easeInOut,
     );
-
     _animationController?.forward();
   }
 
@@ -69,100 +67,12 @@ class _AddSortiePageState extends State<AddSortiePage>
     return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_dateSortie == null || _heureDebut == null || _heureFin == null) {
-      _showResponseMessage(
-        message: 'Veuillez remplir tous les champs',
-        color: Colors.red,
-        icon: Icons.error_outline,
-      );
-      return;
-    }
-
+  void _clearResponse() {
     setState(() {
-      _submitting = true;
       _responseMessage = null;
+      _responseColor = null;
+      _responseIcon = null;
     });
-
-    try {
-      final response = await _sendRequest();
-      if (response['success'] == true) {
-        final backendMessage =
-            response['message'] ?? 'Sortie demandée avec succès';
-        _logger.i('✅ Message: $backendMessage');
-
-        Get.snackbar(
-          'Succès',
-          backendMessage,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-          colorText: const Color(0xFF2E7D32),
-          duration: const Duration(seconds: 2),
-        );
-
-        _motifController.clear();
-        final now = DateTime.now();
-        setState(() {
-          _dateSortie = now;
-          _heureDebut = TimeOfDay.now();
-          _heureFin = TimeOfDay(hour: now.hour + 2, minute: now.minute);
-          _dateSortieController.text = _formatDate(_dateSortie!);
-        });
-      } else {
-        _showResponseMessage(
-          message: response['message'] ?? 'Échec de la soumission',
-          color: Colors.red,
-          icon: Icons.error_outline,
-        );
-      }
-    } catch (e) {
-      _showResponseMessage(
-        message: 'Erreur: $e',
-        color: Colors.red,
-        icon: Icons.error_outline,
-      );
-    } finally {
-      setState(() => _submitting = false);
-    }
-  }
-
-  Future<Map<String, dynamic>> _sendRequest() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-
-    if (token == null) {
-      return {'success': false, 'message': 'Non authentifié'};
-    }
-
-    try {
-      final body = {
-        'motif': _motifController.text.trim(),
-        'dateSortie': _formatDate(_dateSortie!),
-        'heureDebut': _formatTime(_heureDebut!),
-        'heureFin': _formatTime(_heureFin!),
-      };
-
-      final response = await http.post(
-        Uri.parse(ApiService.addDemandesSorties()),
-        headers: {'Content-Type': 'application/json', 'token': token},
-        body: jsonEncode(body),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        String msg = 'Sortie demandée avec succès';
-        if (data is List && data.isNotEmpty) {
-          msg = data[0]['MSG'] ?? msg;
-        } else if (data is Map) {
-          msg = data['MSG'] ?? data['message'] ?? msg;
-        }
-        return {'success': true, 'message': msg};
-      }
-      return {'success': false, 'message': 'Erreur ${response.statusCode}'};
-    } catch (e) {
-      return {'success': false, 'message': 'Erreur: $e'};
-    }
   }
 
   void _showResponseMessage({
@@ -177,15 +87,72 @@ class _AddSortiePageState extends State<AddSortiePage>
     });
   }
 
-  @override
-  void dispose() {
-    _animationController?.dispose();
-    _motifController.dispose();
-    _dateSortieController.dispose();
-    super.dispose();
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_dateSortie == null || _heureDebut == null || _heureFin == null) {
+      _showResponseMessage(
+        message: 'Veuillez remplir tous les champs',
+        color: Colors.red,
+        icon: Icons.error_outline,
+      );
+      return;
+    }
+
+    // Validate time range
+    final start = _heureDebut!.hour * 60 + _heureDebut!.minute;
+    final end = _heureFin!.hour * 60 + _heureFin!.minute;
+    if (end <= start) {
+      _showResponseMessage(
+        message: 'Heure fin doit être après heure début',
+        color: Colors.red,
+        icon: Icons.error_outline,
+      );
+      return;
+    }
+
+    _clearResponse();
+
+    final result = await sortieController.addSortie(
+      motif: _motifController.text.trim(),
+      dateSortie: _dateSortie!,
+      heureDebut: _heureDebut!,
+      heureFin: _heureFin!,
+    );
+
+    if (result['success'] == true) {
+      final msg = result['message'] ?? 'Sortie demandée avec succès';
+
+      Get.snackbar(
+        'Succès',
+        msg,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+        colorText: const Color(0xFF2E7D32),
+        duration: const Duration(seconds: 2),
+      );
+
+      _motifController.clear();
+
+      final now = DateTime.now();
+      final fin = now.add(const Duration(hours: 2));
+
+      setState(() {
+        _dateSortie = now;
+        _heureDebut = TimeOfDay.now();
+        _heureFin = TimeOfDay.fromDateTime(fin);
+        _dateSortieController.text = _formatDate(_dateSortie!);
+      });
+    } else {
+      _showResponseMessage(
+        message: result['message'] ?? 'Échec de la soumission',
+        color: Colors.red,
+        icon: Icons.error_outline,
+      );
+    }
   }
 
-  // New date field builder matching AddCongePage design
+  // Date field (same design)
   Widget _buildDateField(
     TextEditingController controller,
     String label,
@@ -250,24 +217,17 @@ class _AddSortiePageState extends State<AddSortiePage>
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          controller.text.isEmpty
-                              ? 'Sélectionner'
-                              : controller.text,
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: controller.text.isEmpty
-                                ? FontWeight.w400
-                                : FontWeight.w600,
-                            color: controller.text.isEmpty
-                                ? Colors.grey
-                                : const Color(0xFF111827),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      controller.text.isEmpty ? 'Sélectionner' : controller.text,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: controller.text.isEmpty
+                            ? FontWeight.w400
+                            : FontWeight.w600,
+                        color: controller.text.isEmpty
+                            ? Colors.grey
+                            : const Color(0xFF111827),
+                      ),
                     ),
                   ),
                   Container(
@@ -291,7 +251,7 @@ class _AddSortiePageState extends State<AddSortiePage>
     );
   }
 
-  // New time field builder matching AddCongePage design
+  // Time field (same design)
   Widget _buildTimeField(
     String label,
     TimeOfDay? time,
@@ -387,22 +347,16 @@ class _AddSortiePageState extends State<AddSortiePage>
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          time != null ? _formatTime(time) : 'Sélectionner',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: time != null
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                            color: time != null
-                                ? const Color(0xFF111827)
-                                : Colors.grey,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      time != null ? _formatTime(time) : 'Sélectionner',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight:
+                            time != null ? FontWeight.w600 : FontWeight.w400,
+                        color: time != null
+                            ? const Color(0xFF111827)
+                            : Colors.grey,
+                      ),
                     ),
                   ),
                   Container(
@@ -427,8 +381,16 @@ class _AddSortiePageState extends State<AddSortiePage>
   }
 
   @override
+  void dispose() {
+    _animationController?.dispose();
+    _motifController.dispose();
+    _dateSortieController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    Widget scrollContent = SingleChildScrollView(
+    final scrollContent = SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       child: Column(
         children: [
@@ -467,7 +429,6 @@ class _AddSortiePageState extends State<AddSortiePage>
                     maxLines: 3,
                   ),
                   const SizedBox(height: 16),
-                  // Updated date field with blur animation
                   _buildDateField(
                     _dateSortieController,
                     'Date de sortie',
@@ -503,6 +464,7 @@ class _AddSortiePageState extends State<AddSortiePage>
                           );
                         },
                       );
+
                       if (picked != null) {
                         setState(() {
                           _dateSortie = picked;
@@ -512,7 +474,6 @@ class _AddSortiePageState extends State<AddSortiePage>
                     },
                   ),
                   const SizedBox(height: 16),
-                  // Updated time fields with blur animation
                   Row(
                     children: [
                       Expanded(
@@ -533,20 +494,15 @@ class _AddSortiePageState extends State<AddSortiePage>
                     ],
                   ),
                   const SizedBox(height: 26),
-                  TweenAnimationBuilder<double>(
-                    duration: const Duration(milliseconds: 700),
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, child) {
-                      return Transform.scale(
-                        scale: 0.8 + (0.2 * value),
-                        child: Opacity(opacity: value, child: child),
-                      );
-                    },
-                    child: SizedBox(
+
+                  // ✅ BUTTON CONNECTED TO CONTROLLER LOADING
+                  Obx(() {
+                    final loading = sortieController.isLoading.value;
+
+                    return SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _submitting ? null : _submit,
+                        onPressed: loading ? null : _submit,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00E5A0),
                           foregroundColor: Colors.white,
@@ -556,7 +512,7 @@ class _AddSortiePageState extends State<AddSortiePage>
                             borderRadius: BorderRadius.circular(18),
                           ),
                         ),
-                        child: _submitting
+                        child: loading
                             ? const SizedBox(
                                 height: 18,
                                 width: 18,
@@ -575,8 +531,9 @@ class _AddSortiePageState extends State<AddSortiePage>
                                 ),
                               ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
+
                   if (_responseMessage != null) ...[
                     const SizedBox(height: 20),
                     TweenAnimationBuilder<double>(
@@ -628,7 +585,7 @@ class _AddSortiePageState extends State<AddSortiePage>
       ),
     );
 
-    Widget animatedContent = (_fadeAnimation != null)
+    final animatedContent = (_fadeAnimation != null)
         ? FadeTransition(opacity: _fadeAnimation!, child: scrollContent)
         : scrollContent;
 

@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
-import 'package:hr_perfect/services/api_service.dart';
-import 'package:http/http.dart' as http;
-import 'package:logger/logger.dart';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hr_perfect/controllers/attestation_controller.dart';
 
 class AddAttestationPage extends StatefulWidget {
   const AddAttestationPage({super.key});
@@ -14,19 +10,19 @@ class AddAttestationPage extends StatefulWidget {
   State<AddAttestationPage> createState() => _AddAttestationPageState();
 }
 
-class _AddAttestationPageState extends State<AddAttestationPage> with SingleTickerProviderStateMixin {
+class _AddAttestationPageState extends State<AddAttestationPage> 
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
- 
-  List<Map<String, dynamic>> _attestationTypes = [];
-  String? _selectedType;
+  
+  // ✅ CRITICAL: Initialize the AttestationController
+  final AttestationController _attestationController = Get.put(AttestationController());
 
-  bool _submitting = false;
+  String? _selectedType;
+  late DateTime _requestDate;
+
   String? _responseMessage;
   Color? _responseColor;
   IconData? _responseIcon;
-
-  final Logger _logger = Logger();
-  late DateTime _requestDate;
 
   // Animation controller
   AnimationController? _animationController;
@@ -37,7 +33,6 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
     super.initState();
     _initAnimations();
     _requestDate = DateTime.now();
-    _fetchAttestationTypes();
   }
 
   void _initAnimations() {
@@ -54,7 +49,6 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
     _animationController?.forward();
   }
 
-  // Format the date to dd/MM/yyyy
   String _formatDate(DateTime d) {
     final day = d.day.toString().padLeft(2, '0');
     final month = d.month.toString().padLeft(2, '0');
@@ -62,54 +56,7 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
     return '$day/$month/$year';
   }
 
-  // Fetch attestation types from the API
-  Future<void> _fetchAttestationTypes() async {
-    try {
-      final token = await getToken();
-
-      if (token == null) {
-        _showResponseMessage(
-          message: 'Le jeton est manquant ou invalide',
-          color: Colors.red,
-          icon: Icons.error_outline,
-        );
-        return;
-      }
-
-      final response = await http.get(
-        Uri.parse(ApiService.getTypesAttestations()),
-        headers: {
-          'Content-Type': 'application/json',
-          'token': token,
-        },
-      );
-
-      if (response.statusCode == 200 && response.body.isNotEmpty) {
-        final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          _attestationTypes = data
-              .map((item) => {'libelle': item['libelle'], 'id': item['id']})
-              .toList();
-        });
-      } else {
-        _logger.i('Erreur: ${response.statusCode}, Corps: ${response.body}');
-        _showResponseMessage(
-          message: 'Échec du chargement des types d\'attestation',
-          color: Colors.red,
-          icon: Icons.error_outline,
-        );
-      }
-    } catch (e) {
-      _logger.e('Erreur lors de la récupération des types d\'attestation: $e');
-      _showResponseMessage(
-        message: 'Erreur lors de la récupération des types d\'attestation',
-        color: Colors.red,
-        icon: Icons.error_outline,
-      );
-    }
-  }
-
-  // Submit the form
+  // ✅ SIMPLIFIED: Use controller method instead of manual API call
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -123,123 +70,38 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
       return;
     }
 
-    setState(() {
-      _submitting = true;
-      _responseMessage = null;
-    });
+    // Use controller's addAttestation method
+    final result = await _attestationController.addAttestation(
+      typeId: _selectedType!,
+      requestDate: _requestDate,
+    );
 
-    try {
-      final response = await _sendRequest(_selectedType!);
-
-      if (response['success'] == true) {
-        final backendMessage = response['message'] ?? 'Demande soumise avec succès';
-        _logger.i('✅ Affichage du message backend: $backendMessage');
-        
-        Get.snackbar(
-          'Succès',
-          backendMessage,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-          colorText: const Color(0xFF2E7D32),
-          duration: const Duration(seconds: 2),
-        );
-        
-        // Reset the form after successful submission
-        setState(() {
-          _selectedType = null;
-          _requestDate = DateTime.now();
-        });
-      } else {
-        _showResponseMessage(
-          message: response['message'] ?? 'Échec de la soumission de la demande',
-          color: Colors.red,
-          icon: Icons.error_outline,
-        );
-      }
-    } catch (e) {
-      _logger.e('Erreur lors de la soumission: $e');
+    if (result['success'] == true) {
+      final backendMessage = result['message'] ?? 'Demande soumise avec succès';
+      
+      Get.snackbar(
+        'Succès',
+        backendMessage,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+        colorText: const Color(0xFF2E7D32),
+        duration: const Duration(seconds: 2),
+      );
+      
+      // Reset the form after successful submission
+      setState(() {
+        _selectedType = null;
+        _requestDate = DateTime.now();
+      });
+    } else {
       _showResponseMessage(
-        message: 'Erreur lors de la soumission: $e',
+        message: result['message'] ?? 'Échec de la soumission de la demande',
         color: Colors.red,
         icon: Icons.error_outline,
       );
-    } finally {
-      setState(() {
-        _submitting = false;
-      });
     }
   }
 
-  // Get token from SharedPreferences
-  Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
-  }
-
-  // Send request to the API
-  Future<Map<String, dynamic>> _sendRequest(String typeId) async {
-    final token = await getToken();
-
-    if (token == null) {
-      return {'success': false, 'message': 'Impossible de s\'authentifier'};
-    }
-
-    String url = ApiService.addAttestations(int.parse(typeId));
-    try {
-      final requestBody = {
-        'dateDebut': _formatDate(_requestDate),
-        'dateFin': _formatDate(_requestDate),
-      };
-
-      _logger.i('Envoi de la requête vers: $url');
-      _logger.i('Corps de la requête: ${jsonEncode(requestBody)}');
-
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'token': token,
-        },
-        body: jsonEncode(requestBody),
-      );
-
-      _logger.i('Statut de la réponse: ${response.statusCode}');
-      _logger.i('Corps de la réponse: ${response.body}');
-
-      if (response.statusCode == 200) {
-        try {
-          final responseJson = jsonDecode(response.body);
-          
-          if (responseJson is List && responseJson.isNotEmpty) {
-            final msg = responseJson[0]['MSG'] ?? 'La demande a été effectuée avec succès';
-            return {'success': true, 'message': msg};
-          } else if (responseJson is Map) {
-            final msg = responseJson['MSG'] ?? 
-                       responseJson['message'] ?? 
-                       'La demande a été effectuée avec succès';
-            return {'success': true, 'message': msg};
-          } else {
-            return {'success': true, 'message': 'La demande a été effectuée avec succès'};
-          }
-        } catch (e) {
-          _logger.e('Erreur lors de l\'analyse de la réponse: $e');
-          return {'success': true, 'message': 'La demande a été effectuée avec succès'};
-        }
-      } else if (response.statusCode == 401) {
-        return {'success': false, 'message': 'Échec de l\'authentification. Veuillez vous reconnecter.'};
-      } else {
-        return {
-          'success': false,
-          'message': 'La demande a échoué avec le statut: ${response.statusCode}. ${response.body}',
-        };
-      }
-    } catch (e) {
-      _logger.e('Erreur lors de l\'envoi de la requête: $e');
-      return {'success': false, 'message': 'Erreur réseau: Impossible de se connecter au serveur'};
-    }
-  }
-
-  // Show response message in the UI
   void _showResponseMessage({
     required String message,
     required Color color,
@@ -258,7 +120,6 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
     super.dispose();
   }
 
-  // Build Header Card for the top section
   Widget _buildHeaderCard() {
     return Container(
       width: double.infinity,
@@ -326,7 +187,6 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
     );
   }
 
-  // Build the response message
   Widget _buildResponseMessage() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -361,7 +221,6 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
     );
   }
 
-  // Build radio button option
   Widget _buildRadioOption(Map<String, dynamic> item, int index) {
     final isSelected = _selectedType == item['id'].toString();
     
@@ -459,7 +318,6 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
     );
   }
 
-  // Build date display card
   Widget _buildDateCard() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -604,33 +462,58 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (_attestationTypes.isEmpty)
-                  TweenAnimationBuilder<double>(
-                    duration: const Duration(milliseconds: 600),
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    curve: Curves.easeInOut,
-                    builder: (context, value, child) {
-                      return Opacity(
-                        opacity: value,
-                        child: child,
-                      );
-                    },
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            const Color(0xFF00E5A0),
+                
+                // ✅ Use Obx to react to controller state changes
+                Obx(() {
+                  if (_attestationController.isLoadingTypes.value) {
+                    return TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 600),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      curve: Curves.easeInOut,
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: child,
+                        );
+                      },
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              const Color(0xFF00E5A0),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  )
-                else
-                  ..._attestationTypes.asMap().entries.map(
-                    (entry) => _buildRadioOption(entry.value, entry.key),
-                  ),
+                    );
+                  }
+                  
+                  if (_attestationController.attestationTypes.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          'Aucun type d\'attestation disponible',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  
+                  return Column(
+                    children: _attestationController.attestationTypes
+                        .asMap()
+                        .entries
+                        .map((entry) => _buildRadioOption(entry.value, entry.key))
+                        .toList(),
+                  );
+                }),
+                
                 const SizedBox(height: 26),
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 700),
@@ -645,10 +528,12 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
                       ),
                     );
                   },
-                  child: SizedBox(
+                  child: Obx(() => SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _submitting ? null : _submit,
+                      onPressed: _attestationController.isLoading.value 
+                          ? null 
+                          : _submit,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF00E5A0),
                         foregroundColor: Colors.white,
@@ -659,7 +544,7 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
                           borderRadius: BorderRadius.circular(18),
                         ),
                       ),
-                      child: _submitting
+                      child: _attestationController.isLoading.value
                           ? const SizedBox(
                               height: 18,
                               width: 18,
@@ -678,7 +563,7 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
                               ),
                             ),
                     ),
-                  ),
+                  )),
                 ),
                 if (_responseMessage != null) ...[
                   const SizedBox(height: 20),
@@ -705,7 +590,6 @@ class _AddAttestationPageState extends State<AddAttestationPage> with SingleTick
       ),
     );
 
-    // Wrap with fade animation if available
     Widget animatedContent = (_fadeAnimation != null)
         ? FadeTransition(
             opacity: _fadeAnimation!,

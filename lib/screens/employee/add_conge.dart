@@ -1,13 +1,8 @@
-import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:hr_perfect/services/api_service.dart';
-import 'package:http/http.dart' as http;
-import 'package:logger/logger.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:hr_perfect/controllers/conge_controller.dart';
 import '../../widgets/app_text_field.dart';
 
 class AddCongePage extends StatefulWidget {
@@ -24,15 +19,15 @@ class _AddCongePageState extends State<AddCongePage>
   final _dateDebutController = TextEditingController();
   final _dateFinController = TextEditingController();
 
+  // ✅ CRITICAL: Initialize the CongeController
+  final CongeController _congeController = Get.put(CongeController());
+
   DateTime? _dateDebut;
   DateTime? _dateFin;
 
-  bool _enCoursDesoumission = false;
   String? _messageReponse;
   Color? _couleurReponse;
   IconData? _iconeReponse;
-
-  final Logger _logger = Logger();
 
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
@@ -70,40 +65,7 @@ class _AddCongePageState extends State<AddCongePage>
     return '$jour/$mois/$annee';
   }
 
-  String _decodeBody(http.Response r) {
-    try {
-      return utf8.decode(r.bodyBytes);
-    } catch (_) {
-      return r.body;
-    }
-  }
-
-  String? _extractMsg(dynamic decoded) {
-    try {
-      if (decoded is List && decoded.isNotEmpty) {
-        final first = decoded.first;
-        if (first is Map && first['MSG'] != null) {
-          return first['MSG'].toString();
-        }
-      }
-      if (decoded is Map && decoded['MSG'] != null) {
-        return decoded['MSG'].toString();
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  bool _looksLikeErrorMsg(String msg) {
-    final m = msg.toLowerCase();
-    return msg.contains('!!') ||
-        m.contains('erreur') ||
-        m.contains('échec') ||
-        m.contains('echec') ||
-        m.contains('impossible') ||
-        m.contains('à cheval') ||
-        m.contains('a cheval');
-  }
-
+  // ✅ FIXED: Clear previous messages and display backend MSG
   Future<void> _soumettre() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -116,169 +78,48 @@ class _AddCongePageState extends State<AddCongePage>
       return;
     }
 
+    // 🔥 Clear any previous message before making the request
     setState(() {
-      _enCoursDesoumission = true;
       _messageReponse = null;
+      _couleurReponse = null;
+      _iconeReponse = null;
     });
 
-    try {
-      final requete = {
-        'libelle': _libelleController.text.trim(),
-        'dateDebut': _dateDebut!,
-        'dateFin': _dateFin!,
-      };
+    // Use controller's addConge method
+    final result = await _congeController.addConge(
+      libelle: _libelleController.text.trim(),
+      dateDebut: _dateDebut!,
+      dateFin: _dateFin!,
+    );
 
-      final reponse = await _envoyerRequete(requete);
+    if (result['success'] == true) {
+      final backendMessage = result['message'] ?? 'Demande soumise avec succès';
 
-      if (reponse['succes'] == true) {
-        final backendMessage =
-            (reponse['message'] ?? 'Demande soumise avec succès').toString();
-
-        _logger.i('✅ Message backend: $backendMessage');
-
-        Get.snackbar(
-          'Succès',
-          backendMessage,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-          colorText: const Color(0xFF2E7D32),
-          duration: const Duration(seconds: 2),
-        );
-
-        _libelleController.clear();
-
-        setState(() {
-          _dateDebut = DateTime.now();
-          _dateFin = DateTime.now().add(const Duration(days: 1));
-          _dateDebutController.text = _formaterDate(_dateDebut!);
-          _dateFinController.text = _formaterDate(_dateFin!);
-        });
-      } else {
-        _afficherMessageReponse(
-          message: (reponse['message'] ?? 'La soumission a échoué').toString(),
-          couleur: Colors.red,
-          icone: Icons.error_outline,
-        );
-      }
-    } catch (e) {
-      _logger.e('Erreur lors de la soumission: $e');
+      // 🔥 Display backend success message
       _afficherMessageReponse(
-        message: 'Erreur lors de la soumission: $e',
+        message: backendMessage,
+        couleur: const Color(0xFF4CAF50),
+        icone: Icons.check_circle_outline,
+      );
+
+      // Also show snackbar for better UX
+      
+
+      // Reset form
+      _libelleController.clear();
+      setState(() {
+        _dateDebut = DateTime.now();
+        _dateFin = DateTime.now().add(const Duration(days: 1));
+        _dateDebutController.text = _formaterDate(_dateDebut!);
+        _dateFinController.text = _formaterDate(_dateFin!);
+      });
+    } else {
+      // 🔥 Display backend error message
+      _afficherMessageReponse(
+        message: result['message'] ?? 'La soumission a échoué',
         couleur: Colors.red,
         icone: Icons.error_outline,
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _enCoursDesoumission = false;
-        });
-      }
-    }
-  }
-
-  Future<Map<String, dynamic>> _envoyerRequete(
-    Map<String, dynamic> requete,
-  ) async {
-    final token = await obtenirToken();
-
-    if (token == null) {
-      _logger.w('Token null - échec authentification');
-      return {'succes': false, 'message': 'Impossible de s\'authentifier'};
-    }
-
-    try {
-      final corpsRequete = {
-        'libelle': requete['libelle'],
-        'dateDebut': _formaterDate(requete['dateDebut']),
-        'dateFin': _formaterDate(requete['dateFin']),
-        'ttjourneDebut': 'tout',
-        'ttjourneFin': 'tout',
-      };
-
-      final url = ApiService.addConges();
-
-      _logger.i('POST => $url');
-      _logger.i('Body => ${jsonEncode(corpsRequete)}');
-
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json', 'token': token},
-        body: jsonEncode(corpsRequete),
-      );
-
-      final body = _decodeBody(response);
-
-      _logger.i('Status => ${response.statusCode}');
-      _logger.i('Response => $body');
-
-      dynamic decoded;
-      try {
-        decoded = body.isEmpty ? null : jsonDecode(body);
-      } catch (_) {
-        decoded = null;
-      }
-
-      final msg = decoded != null ? _extractMsg(decoded) : null;
-
-      if (msg != null && msg.trim().isNotEmpty) {
-        final isOk =
-            response.statusCode == 200 && !_looksLikeErrorMsg(msg.trim());
-        return {'succes': isOk, 'message': msg.trim()};
-      }
-
-      if (response.statusCode == 200) {
-        return {'succes': true, 'message': 'Demande soumise avec succès'};
-      }
-
-      if (response.statusCode == 401) {
-        return {
-          'succes': false,
-          'message': 'Échec de l\'authentification. Veuillez vous reconnecter.',
-        };
-      }
-
-      if (response.statusCode == 400) {
-        return {
-          'succes': false,
-          'message': 'Requête invalide. Vérifiez les champs saisis.',
-        };
-      }
-
-      if (response.statusCode == 500) {
-        return {
-          'succes': false,
-          'message': 'Erreur du serveur. Veuillez réessayer plus tard.',
-        };
-      }
-
-      return {
-        'succes': false,
-        'message': 'La demande a échoué (statut: ${response.statusCode})',
-      };
-    } catch (e) {
-      _logger.e('Erreur réseau: $e');
-
-      final es = e.toString();
-      if (es.contains('SocketException') || es.contains('HandshakeException')) {
-        return {
-          'succes': false,
-          'message': 'Erreur réseau. Vérifiez votre connexion Internet.',
-        };
-      }
-
-      return {'succes': false, 'message': 'Erreur: $e'};
-    }
-  }
-
-  Future<String?> obtenirToken() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      _logger.i('Token récupéré: ${token != null ? "existe" : "null"}');
-      return token;
-    } catch (e) {
-      _logger.e('Erreur token: $e');
-      return null;
     }
   }
 
@@ -472,10 +313,12 @@ class _AddCongePageState extends State<AddCongePage>
                         ),
                       );
                     },
-                    child: SizedBox(
+                    child: Obx(() => SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _enCoursDesoumission ? null : _soumettre,
+                        onPressed: _congeController.isLoading.value 
+                            ? null 
+                            : _soumettre,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00E5A0),
                           foregroundColor: Colors.white,
@@ -485,7 +328,7 @@ class _AddCongePageState extends State<AddCongePage>
                             borderRadius: BorderRadius.circular(18),
                           ),
                         ),
-                        child: _enCoursDesoumission
+                        child: _congeController.isLoading.value
                             ? const SizedBox(
                                 height: 18,
                                 width: 18,
@@ -504,7 +347,7 @@ class _AddCongePageState extends State<AddCongePage>
                                 ),
                               ),
                       ),
-                    ),
+                    )),
                   ),
                   if (_messageReponse != null) ...[
                     const SizedBox(height: 20),
