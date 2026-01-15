@@ -475,28 +475,33 @@ class _NotificationScreenState extends State<NotificationScreen> {
 Color requestStatusColor(RequestStatus status) {
   switch (status) {
     case RequestStatus.demande:
-      return const Color(0xFFFFA726); // orange
+      return const Color(0xFFFFA726);
     case RequestStatus.valide:
-      return const Color(0xFF43A047); // green
+      return const Color(0xFF43A047);
     case RequestStatus.rejete:
-      return const Color(0xFFE53935); // red
+      return const Color(0xFFE53935);
     case RequestStatus.annule:
-      return const Color(0xFFB0BEC5); // gray
+      return const Color(0xFF90A4AE);
+    case RequestStatus.enCours:
+      return const Color(0xFF42A5F5);
   }
 }
 
 String requestStatusLabel(RequestStatus status) {
   switch (status) {
     case RequestStatus.demande:
-      return 'Pending';
+      return 'Demande';
     case RequestStatus.valide:
-      return 'Approved';
+      return 'Validé';
     case RequestStatus.rejete:
-      return 'Rejected';
+      return 'Rejeté';
     case RequestStatus.annule:
-      return 'Cancelled';
+      return 'Annulé';
+    case RequestStatus.enCours:
+      return 'En cours';
   }
 }
+
 
 String requestTypeLabel(String type) {
   switch (type) {

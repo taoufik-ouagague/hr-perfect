@@ -166,6 +166,10 @@ class RequestStatusBadge extends StatelessWidget {
         c = Colors.grey;
         t = "Cancelled";
         break;
+      case RequestStatus.enCours:
+        c = const Color(0xFF42A5F5); // Blue color
+        t = "In Progress";
+        break;
     }
 
     return AnimatedContainer(

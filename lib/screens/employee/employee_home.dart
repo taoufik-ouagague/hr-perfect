@@ -33,15 +33,16 @@ class EmployeeHome extends StatefulWidget {
   State<EmployeeHome> createState() => _EmployeeHomeState();
 }
 
-class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderStateMixin {
+class _EmployeeHomeState extends State<EmployeeHome>
+    with SingleTickerProviderStateMixin {
   final Logger _logger = Logger();
   final HRController controller = Get.find<HRController>();
-  
+
   int _index = 0;
   bool _isLoadingRequests = true;
 
   // Request counts
-  int _totalRequests = 0;
+  int _encoursRequests = 0;
   int _pendingRequests = 0;
   int _approvedRequests = 0;
   int _rejectedRequests = 0;
@@ -63,20 +64,20 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    
+
     _fadeAnimation = CurvedAnimation(
       parent: _animationController!,
       curve: Curves.easeInOut,
     );
-    
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController!,
-      curve: Curves.easeOutCubic,
-    ));
-    
+
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController!,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+
     _animationController?.forward();
   }
 
@@ -104,6 +105,7 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
       ApiService.getTypesAttestations(),
       ApiService.demandesSorties(),
       ApiService.missions(),
+      ApiService.reclamations(),
     ];
 
     try {
@@ -129,7 +131,9 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
       if (!mounted) return;
 
       setState(() {
-        _totalRequests = allRequests.length;
+        _encoursRequests = allRequests
+            .where((r) => r.status == RequestStatus.enCours)
+            .length;
         _pendingRequests = allRequests
             .where((r) => r.status == RequestStatus.demande)
             .length;
@@ -175,9 +179,7 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
       extendBody: true,
       body: pages[_index],
       bottomNavigationBar: Theme(
-        data: ThemeData(
-          canvasColor: Colors.transparent,
-        ),
+        data: ThemeData(canvasColor: Colors.transparent),
         child: _pillBottomBar(),
       ),
     );
@@ -186,17 +188,19 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
   Widget _pillBottomBar() {
     // Get the bottom padding to avoid system UI
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
         12,
         0,
         12,
-        bottomPadding > 0 ? bottomPadding + 8 : 12, // Add extra padding if system UI exists
+        bottomPadding > 0
+            ? bottomPadding + 8
+            : 12, // Add extra padding if system UI exists
       ),
       child: Container(
         height: 72,
-       
+
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -211,11 +215,7 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
         ),
         child: Row(
           children: [
-            _navItem(
-              index: 0,
-              icon: LucideIcons.home,
-              label: "Accueil",
-            ),
+            _navItem(index: 0, icon: LucideIcons.home, label: "Accueil"),
             _navItem(index: 1, icon: LucideIcons.history, label: "Historique"),
             _navItem(index: 2, icon: LucideIcons.user, label: "Profil"),
             _navItem(index: 3, icon: LucideIcons.compass, label: "Explorer"),
@@ -331,7 +331,7 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
                       final prenom = controller.prenom.value.isNotEmpty
                           ? controller.prenom.value
                           : _formatDisplayName(widget.userId);
-                      
+
                       return Text(
                         prenom,
                         style: GoogleFonts.poppins(
@@ -395,7 +395,9 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
                   ),
                   child: const Center(
                     child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00C6FF)),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Color(0xFF00C6FF),
+                      ),
                       strokeWidth: 3,
                     ),
                   ),
@@ -416,18 +418,19 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
                   ),
                   child: Row(
                     children: [
-                      _statPill(
-                        label: "Total",
-                        value: _totalRequests.toString(),
-                        color: const Color(0xFF0072FF),
-                      ),
-                      const SizedBox(width: 12),
+                       const SizedBox(width: 19),
                       _statPill(
                         label: "Demande",
                         value: _pendingRequests.toString(),
                         color: const Color(0xFFFFA726),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 19),
+                      _statPill(
+                        label: "En Cours",
+                        value: _encoursRequests.toString(),
+                        color: const Color(0xFF42A5F5),
+                      ),
+                      const SizedBox(width: 19),
                       _statPill(
                         label: "Validé",
                         value: _approvedRequests.toString(),
@@ -673,19 +676,17 @@ class _EmployeeHomeState extends State<EmployeeHome> with SingleTickerProviderSt
       builder: (context, value, child) {
         return Transform.translate(
           offset: Offset(0, 30 * (1 - value)),
-          child: Opacity(
-            opacity: value,
-            child: child,
-          ),
+          child: Opacity(opacity: value, child: child),
         );
       },
       child: GestureDetector(
         onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => screen)).then(
-            (_) {
-              _fetchRequestCounts();
-            },
-          );
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => screen),
+          ).then((_) {
+            _fetchRequestCounts();
+          });
         },
         child: Container(
           decoration: BoxDecoration(

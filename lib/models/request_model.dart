@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
-enum RequestStatus { demande, valide, rejete, annule }
+enum RequestStatus { demande, valide, rejete, annule, enCours }
 
 class EmployeeProfile {
   String name;
@@ -66,7 +66,7 @@ class EmployeeProfile {
       situationFamilliale: json["situationFamilliale"] ?? "",
       sexe: json["sexe"] ?? "",
       anciennete: json["anciente"] ?? "",
-      photoPath: json["photo"], // Fixed: removed ?? Null
+      photoPath: json["photo"],
     );
   }
 }
@@ -243,6 +243,8 @@ class RequestModel {
   final RequestStatus status;
   final String? adminComment;
   final String? derniereDemande;
+  final String? dateTraitement;
+  final String? typeReclamation;
 
   RequestModel({
     required this.id,
@@ -266,6 +268,8 @@ class RequestModel {
     required this.status,
     this.adminComment,
     this.derniereDemande,
+    this.dateTraitement,
+    this.typeReclamation,
   });
 
   int get createdYear => createdAt.year;
@@ -363,6 +367,9 @@ class RequestModel {
       case 'Annulé':
         status = RequestStatus.annule;
         break;
+      case 'En cours':
+        status = RequestStatus.enCours;
+        break;
       case 'Demande':
       default:
         status = RequestStatus.demande;
@@ -382,29 +389,32 @@ class RequestModel {
     String? dateRetour;
     String? heureRetour;
     String? minRetour;
+    String? dateTraitement;
+    String? typeReclamation;
     
-    if (json.containsKey('typeConge') && json['typeConge'] != null && json['typeConge'].toString().isNotEmpty) {
-      type = 'conge';
-    } else if (json.containsKey('typeAttestation') && json['typeAttestation'] != null) {
-      type = 'attestation';
-      derniereDemande = json['derniere_demande']?.toString();
-    } else if (json.containsKey('typeSortie') && json['typeSortie'] != null) {
-      type = 'sortie';
-      heureSortieDebut = json['heureSortieDebut']?.toString();
-      heureSortieFin = json['heureSortieFin']?.toString();
-      dateSortie = json['dateSortie']?.toString();
-    } else if (json.containsKey('typeMission') && json['typeMission'] != null) {
-      type = 'mission';
-      moyenTransport = json['moyenTransport']?.toString();
-      nbCheveaux = json['nbCheveaux']?.toString();
-      dateDepart = json['dateDepart']?.toString();
-      heureDepart = json['heureDepart']?.toString();
-      minDepart = json['minDepart']?.toString();
-      dateRetour = json['dateRetour']?.toString();
-      heureRetour = json['heureRetour']?.toString();
-      minRetour = json['minRetour']?.toString();
-    } else {
-      if (json.containsKey('moyenTransport') || json.containsKey('designation')) {
+    // Check for réclamation type
+    if (json.containsKey('type') && json['type'] != null && json['type'].toString().isNotEmpty) {
+      final typeValue = json['type'].toString().toUpperCase();
+      if (typeValue == 'ALERTE' || typeValue == 'RECLAMATION') {
+        type = 'reclamation';
+        dateTraitement = json['dateTraitement']?.toString();
+        typeReclamation = json['type']?.toString();
+      }
+    }
+    
+    // Check for other types if not réclamation
+    if (type.isEmpty) {
+      if (json.containsKey('typeConge') && json['typeConge'] != null && json['typeConge'].toString().isNotEmpty) {
+        type = 'conge';
+      } else if (json.containsKey('typeAttestation') && json['typeAttestation'] != null) {
+        type = 'attestation';
+        derniereDemande = json['derniere_demande']?.toString();
+      } else if (json.containsKey('typeSortie') && json['typeSortie'] != null) {
+        type = 'sortie';
+        heureSortieDebut = json['heureSortieDebut']?.toString();
+        heureSortieFin = json['heureSortieFin']?.toString();
+        dateSortie = json['dateSortie']?.toString();
+      } else if (json.containsKey('typeMission') && json['typeMission'] != null) {
         type = 'mission';
         moyenTransport = json['moyenTransport']?.toString();
         nbCheveaux = json['nbCheveaux']?.toString();
@@ -414,28 +424,42 @@ class RequestModel {
         dateRetour = json['dateRetour']?.toString();
         heureRetour = json['heureRetour']?.toString();
         minRetour = json['minRetour']?.toString();
-      } else if (json.containsKey('heureSortieDebut') || json.containsKey('heureSortieFin') || json.containsKey('dateSortie')) {
-        type = 'sortie';
-        heureSortieDebut = json['heureSortieDebut']?.toString();
-        heureSortieFin = json['heureSortieFin']?.toString();
-        dateSortie = json['dateSortie']?.toString();
-      } else if (json.containsKey('typeConge')) {
-        type = 'conge';
       } else {
-        type = 'attestation';
-        derniereDemande = json['derniere_demande']?.toString();
+        if (json.containsKey('moyenTransport') || json.containsKey('designation')) {
+          type = 'mission';
+          moyenTransport = json['moyenTransport']?.toString();
+          nbCheveaux = json['nbCheveaux']?.toString();
+          dateDepart = json['dateDepart']?.toString();
+          heureDepart = json['heureDepart']?.toString();
+          minDepart = json['minDepart']?.toString();
+          dateRetour = json['dateRetour']?.toString();
+          heureRetour = json['heureRetour']?.toString();
+          minRetour = json['minRetour']?.toString();
+        } else if (json.containsKey('heureSortieDebut') || json.containsKey('heureSortieFin') || json.containsKey('dateSortie')) {
+          type = 'sortie';
+          heureSortieDebut = json['heureSortieDebut']?.toString();
+          heureSortieFin = json['heureSortieFin']?.toString();
+          dateSortie = json['dateSortie']?.toString();
+        } else if (json.containsKey('typeConge')) {
+          type = 'conge';
+        } else {
+          type = 'attestation';
+          derniereDemande = json['derniere_demande']?.toString();
+        }
       }
     }
 
     String title = '';
     if (type == 'mission') {
       title = json['objet']?.toString() ?? json['designation']?.toString() ?? 'Mission';
+    } else if (type == 'reclamation') {
+      title = json['libelle']?.toString() ?? 'Réclamation';
     } else {
       title = (json['libelle'] ?? json['motif'] ?? json['objet'] ?? 'Sans titre').toString();
     }
 
-    final d1 = (json['dateDebut'] ?? json['dateDemande'] ?? json['dateSortie'] ?? json['dateDepart'] ?? json['derniere_demande'] ?? '').toString();
-    final d2 = (json['dateFin'] ?? json['dateRetour'] ?? json['dateSortie'] ?? json['derniere_demande'] ?? '').toString();
+    final d1 = (json['dateDebut'] ?? json['dateDemande'] ?? json['dateSortie'] ?? json['dateDepart'] ?? json['dateReclamation'] ?? json['derniere_demande'] ?? '').toString();
+    final d2 = (json['dateFin'] ?? json['dateRetour'] ?? json['dateSortie'] ?? json['dateReclamation'] ?? json['derniere_demande'] ?? '').toString();
     final yearStr = (json['annee'] ?? '2000').toString();
 
     DateTime? startDate = _parseDate(d1);
@@ -483,6 +507,8 @@ class RequestModel {
       dateRetour: dateRetour,
       heureRetour: heureRetour,
       minRetour: minRetour,
+      dateTraitement: dateTraitement,
+      typeReclamation: typeReclamation,
     );
   }
 }

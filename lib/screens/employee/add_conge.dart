@@ -19,15 +19,10 @@ class _AddCongePageState extends State<AddCongePage>
   final _dateDebutController = TextEditingController();
   final _dateFinController = TextEditingController();
 
-  // ✅ CRITICAL: Initialize the CongeController
   final CongeController _congeController = Get.put(CongeController());
 
   DateTime? _dateDebut;
   DateTime? _dateFin;
-
-  String? _messageReponse;
-  Color? _couleurReponse;
-  IconData? _iconeReponse;
 
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
@@ -65,27 +60,24 @@ class _AddCongePageState extends State<AddCongePage>
     return '$jour/$mois/$annee';
   }
 
-  // ✅ FIXED: Clear previous messages and display backend MSG
   Future<void> _soumettre() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_dateDebut == null || _dateFin == null) {
-      _afficherMessageReponse(
-        message: 'Veuillez sélectionner les dates de début et de fin',
-        couleur: Colors.red,
-        icone: Icons.error_outline,
+      final errorMessage = 'Veuillez sélectionner les dates de début et de fin';
+      
+      // Show error snackbar only
+      Get.snackbar(
+        'Erreur',
+        errorMessage,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[700],
+        duration: const Duration(seconds: 3),
       );
       return;
     }
 
-    // 🔥 Clear any previous message before making the request
-    setState(() {
-      _messageReponse = null;
-      _couleurReponse = null;
-      _iconeReponse = null;
-    });
-
-    // Use controller's addConge method
     final result = await _congeController.addConge(
       libelle: _libelleController.text.trim(),
       dateDebut: _dateDebut!,
@@ -95,15 +87,15 @@ class _AddCongePageState extends State<AddCongePage>
     if (result['success'] == true) {
       final backendMessage = result['message'] ?? 'Demande soumise avec succès';
 
-      // 🔥 Display backend success message
-      _afficherMessageReponse(
-        message: backendMessage,
-        couleur: const Color(0xFF4CAF50),
-        icone: Icons.check_circle_outline,
+      // Show success snackbar only
+      Get.snackbar(
+        'Succès',
+        backendMessage,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+        colorText: const Color(0xFF2E7D32),
+        duration: const Duration(seconds: 2),
       );
-
-      // Also show snackbar for better UX
-      
 
       // Reset form
       _libelleController.clear();
@@ -114,25 +106,18 @@ class _AddCongePageState extends State<AddCongePage>
         _dateFinController.text = _formaterDate(_dateFin!);
       });
     } else {
-      // 🔥 Display backend error message
-      _afficherMessageReponse(
-        message: result['message'] ?? 'La soumission a échoué',
-        couleur: Colors.red,
-        icone: Icons.error_outline,
+      final errorMessage = result['message'] ?? 'La soumission a échoué';
+      
+      // Show error snackbar only
+      Get.snackbar(
+        'Erreur',
+        errorMessage,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[700],
+        duration: const Duration(seconds: 3),
       );
     }
-  }
-
-  void _afficherMessageReponse({
-    required String message,
-    required Color couleur,
-    required IconData icone,
-  }) {
-    setState(() {
-      _messageReponse = message;
-      _couleurReponse = couleur;
-      _iconeReponse = icone;
-    });
   }
 
   @override
@@ -349,24 +334,6 @@ class _AddCongePageState extends State<AddCongePage>
                       ),
                     )),
                   ),
-                  if (_messageReponse != null) ...[
-                    const SizedBox(height: 20),
-                    TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 400),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      curve: Curves.easeOutBack,
-                      builder: (context, value, child) {
-                        final safeOpacity = value.clamp(0.0, 1.0);
-                        final safeScale = value.clamp(0.0, 1.25);
-
-                        return Transform.scale(
-                          scale: safeScale,
-                          child: Opacity(opacity: safeOpacity, child: child),
-                        );
-                      },
-                      child: _construireMessageReponse(),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -461,32 +428,6 @@ class _AddCongePageState extends State<AddCongePage>
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _construireMessageReponse() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-      decoration: BoxDecoration(
-        color: _couleurReponse?.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(_iconeReponse, color: _couleurReponse),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _messageReponse ?? '',
-              style: TextStyle(
-                color: _couleurReponse,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
             ),
           ),
         ],
