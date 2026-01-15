@@ -35,7 +35,6 @@ class TopWaveClipper extends CustomClipper<Path> {
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
 
-// Sticky Header Delegate
 class StickyFilterDelegate extends SliverPersistentHeaderDelegate {
   final Widget child;
   final double height;
@@ -80,6 +79,8 @@ IconData requestTypeIconByKey(String typeKey) {
       return Icons.task_alt;
     case 'reclamation':
       return Icons.error_outline;
+    case 'pret':
+      return Icons.account_balance_wallet_outlined;
     default:
       return Icons.help_outline;
   }
@@ -97,6 +98,8 @@ String requestTypeLabelByKey(String typeKey) {
       return 'Mission';
     case 'reclamation':
       return 'Réclamation';
+    case 'pret':
+      return 'Prêt';
     default:
       return typeKey;
   }
@@ -114,6 +117,8 @@ Color getTypeColor(String typeKey) {
       return const Color(0xFF8B5CF6);
     case 'reclamation':
       return const Color(0xFFEF4444);
+    case 'pret':
+      return const Color(0xFF06B6D4);
     default:
       return Colors.grey;
   }
@@ -242,9 +247,9 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
       ApiService.getTypesAttestations(),
       ApiService.missions(),
       ApiService.reclamations(),
+      ApiService.listDemandesPrets(),
     ];
 
-    // 🔍 DEBUG: Log all API URLs
     _logger.i('=== FETCHING FROM ${apiUrls.length} APIS ===');
     for (var i = 0; i < apiUrls.length; i++) {
       _logger.i('API $i: ${apiUrls[i]}');
@@ -268,45 +273,45 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
 
         _logger.i('GET $url => ${response.statusCode}');
 
-        // 🔍 DEBUG: Special logging for réclamations
-        if (url.contains('reclamations')) {
-          _logger.i('━━━ RÉCLAMATIONS API RESPONSE ━━━');
+        if (url.contains('reclamations') || url.contains('prets')) {
+          _logger.i('━━━ ${url.contains('reclamations') ? 'RÉCLAMATIONS' : 'PRÊTS'} API RESPONSE ━━━');
           _logger.i('Status: ${response.statusCode}');
           _logger.i('Body length: ${response.body.length} chars');
-          _logger.i('Body preview: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}...');
+          _logger.i(
+            'Body preview: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}...',
+          );
         }
 
         if (response.statusCode == 200) {
           try {
             final List<dynamic> data = jsonDecode(response.body);
-            
-            // 🔍 DEBUG: Log réclamation data before parsing
-            if (url.contains('reclamations')) {
-              _logger.i('Réclamations raw count: ${data.length}');
+
+            if (url.contains('reclamations') || url.contains('prets')) {
+              _logger.i('${url.contains('reclamations') ? 'Réclamations' : 'Prêts'} raw count: ${data.length}');
               if (data.isNotEmpty) {
-                _logger.i('First réclamation: ${data[0]}');
+                _logger.i('First item: ${data[0]}');
               }
             }
-            
+
             final parsed = data
                 .map((e) => RequestModel.fromJson(e as Map<String, dynamic>))
                 .toList();
-            
-            // 🔍 DEBUG: Log réclamation data after parsing
-            if (url.contains('reclamations')) {
-              _logger.i('Réclamations parsed count: ${parsed.length}');
+
+            if (url.contains('reclamations') || url.contains('prets')) {
+              _logger.i('${url.contains('reclamations') ? 'Réclamations' : 'Prêts'} parsed count: ${parsed.length}');
               for (var req in parsed) {
-                _logger.i('  - Type: ${req.type}, Title: ${req.title}, Status: ${req.status}');
+                _logger.i(
+                  '  - Type: ${req.type}, Title: ${req.title}, Status: ${req.status}',
+                );
               }
             }
-            
+
             allRequests.addAll(parsed);
           } catch (e) {
             _logger.e('Error parsing response from $url: $e');
-            
-            // 🔍 DEBUG: Extra error info for réclamations
-            if (url.contains('reclamations')) {
-              _logger.e('❌ RÉCLAMATIONS PARSING FAILED');
+
+            if (url.contains('reclamations') || url.contains('prets')) {
+              _logger.e('❌ ${url.contains('reclamations') ? 'RÉCLAMATIONS' : 'PRÊTS'} PARSING FAILED');
               _logger.e('Error: $e');
               _logger.e('Response body: ${response.body}');
             }
@@ -342,19 +347,24 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
         }
       }
 
-      // 🔍 DEBUG: Final summary
-      final reclamationCount = allRequests.where((r) => r.type == 'reclamation').length;
+      final reclamationCount = allRequests
+          .where((r) => r.type == 'reclamation')
+          .length;
       final congeCount = allRequests.where((r) => r.type == 'conge').length;
-      final attestationCount = allRequests.where((r) => r.type == 'attestation').length;
+      final attestationCount = allRequests
+          .where((r) => r.type == 'attestation')
+          .length;
       final sortieCount = allRequests.where((r) => r.type == 'sortie').length;
       final missionCount = allRequests.where((r) => r.type == 'mission').length;
-      
+      final pretCount = allRequests.where((r) => r.type == 'pret').length;
+
       _logger.i('━━━ LOADING SUMMARY ━━━');
       _logger.i('  Congés: $congeCount');
       _logger.i('  Attestations: $attestationCount');
       _logger.i('  Sorties: $sortieCount');
       _logger.i('  Missions: $missionCount');
       _logger.i('  Réclamations: $reclamationCount');
+      _logger.i('  Prêts: $pretCount');
 
       if (!mounted) return;
       setState(() {
@@ -397,33 +407,35 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
   }
 
   List<RequestModel> get _visible {
-    Iterable<RequestModel> list = requests;
-    if (_typeFilter != null) {
-      list = list.where(
-        (r) => r.type.toLowerCase() == _typeFilter!.toLowerCase(),
-      );
-    }
-    if (_statusFilter != null) {
-      list = list.where((r) => r.status == _statusFilter);
-    }
-    if (_q.isNotEmpty) {
-      list = list.where((r) {
-        final hay = '${r.title} ${r.reason} ${r.type}'.toLowerCase();
-        return hay.contains(_q);
-      });
-    }
-    final out = list.toList();
-    out.sort((a, b) {
-      final yearCompare = b.createdYear.compareTo(a.createdYear);
-      if (yearCompare != 0) return yearCompare;
-      return b.startDate.compareTo(a.startDate);
-    });
-    return out;
+  Iterable<RequestModel> list = requests;
+  if (_typeFilter != null) {
+    list = list.where(
+      (r) => r.type.toLowerCase() == _typeFilter!.toLowerCase(),
+    );
   }
+  if (_statusFilter != null) {
+    list = list.where((r) => r.status == _statusFilter);
+  }
+  if (_q.isNotEmpty) {
+    list = list.where((r) {
+      final hay = '${r.title} ${r.reason} ${r.type}'.toLowerCase();
+      return hay.contains(_q);
+    });
+  }
+  final out = list.toList();
+  out.sort((a, b) {
+    // Sort by creation date (most recent first)
+    final createdAtCompare = b.createdAt.compareTo(a.createdAt);
+    if (createdAtCompare != 0) return createdAtCompare;
+    
+    // Then by start date (most recent first)
+    return b.startDate.compareTo(a.startDate);
+  });
+  return out;
+}
 
   @override
   Widget build(BuildContext context) {
-    
     final pending = requests
         .where((r) => r.status == RequestStatus.demande)
         .length;
@@ -442,7 +454,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
       backgroundColor: const Color(0xFFF8FAFC),
       body: Stack(
         children: [
-          // Animated gradient background
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -454,7 +465,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
               ),
             ),
           ),
-          // Wave header with glass effect
           Align(
             alignment: Alignment.topCenter,
             child: ClipPath(
@@ -491,10 +501,8 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
-                    // App Bar
                     SliverToBoxAdapter(child: _buildAppBar()),
 
-                    // Header Stats
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -512,20 +520,16 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
 
                     SliverToBoxAdapter(child: const SizedBox(height: 16)),
 
-                    // Sticky Filters Section
                     SliverPersistentHeader(
                       pinned: true,
                       delegate: StickyFilterDelegate(
                         height: 185,
                         child: Column(
                           children: [
-                            // Search Bar
                             _buildSearchBar(),
                             const SizedBox(height: 12),
-                            // Status Filters
                             _buildStatusFilters(),
                             const SizedBox(height: 12),
-                            // Type Filters
                             _buildTypeFilters(),
                             const SizedBox(height: 12),
                           ],
@@ -533,7 +537,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                       ),
                     ),
 
-                    // Content
                     if (_isLoading)
                       SliverFillRemaining(
                         child: Center(
@@ -823,6 +826,15 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                   : 'reclamation',
             ),
           ),
+          const SizedBox(width: 10),
+          _typeChip(
+            "Prêt",
+            _typeFilter == 'pret',
+            'pret',
+            () => setState(
+              () => _typeFilter = _typeFilter == 'pret' ? null : 'pret',
+            ),
+          ),
         ],
       ),
     );
@@ -860,75 +872,71 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
   }
 
   Widget _typeChip(
-  String label,
-  bool selected,
-  String? typeKey,
-  VoidCallback onTap,
-) {
-  Color chipColor = typeKey != null
-      ? getTypeColor(typeKey)
-      : const Color(0xFF0072FF);
-  IconData? chipIcon = typeKey != null ? requestTypeIconByKey(typeKey) : null;
+    String label,
+    bool selected,
+    String? typeKey,
+    VoidCallback onTap,
+  ) {
+    Color chipColor = typeKey != null
+        ? getTypeColor(typeKey)
+        : const Color(0xFF0072FF);
+    IconData? chipIcon = typeKey != null ? requestTypeIconByKey(typeKey) : null;
 
-  return Material(
-    color: selected ? chipColor.withValues(alpha: 0.12) : Colors.white,
-    borderRadius: BorderRadius.circular(12),
-    elevation: selected ? 0 : 2,
-    shadowColor: Colors.black.withValues(alpha: 0.05),
-    child: InkWell(
+    return Material(
+      color: selected ? chipColor.withValues(alpha: 0.12) : Colors.white,
       borderRadius: BorderRadius.circular(12),
-      onTap: () {
-        setState(() {
-          // Toggle the type filter
-          final newTypeFilter = _typeFilter == typeKey ? null : typeKey;
-          _typeFilter = newTypeFilter;
-          
-          // Set default status based on type
-          if (newTypeFilter != null) {
-            if (typeKey == 'reclamation') {
-              // Réclamation defaults to "En cours"
-              _statusFilter = RequestStatus.enCours;
-            } else {
-              // All other types default to "Demande"
-              _statusFilter = RequestStatus.demande;
+      elevation: selected ? 0 : 2,
+      shadowColor: Colors.black.withValues(alpha: 0.05),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          setState(() {
+            final newTypeFilter = _typeFilter == typeKey ? null : typeKey;
+            _typeFilter = newTypeFilter;
+
+            if (newTypeFilter != null) {
+              if (typeKey == 'reclamation') {
+                _statusFilter = RequestStatus.enCours;
+              } else {
+                _statusFilter = RequestStatus.demande;
+              }
             }
-          }
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? chipColor : Colors.grey.withValues(alpha: 0.2),
-            width: selected ? 2 : 1,
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? chipColor : Colors.grey.withValues(alpha: 0.2),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (chipIcon != null) ...[
+                Icon(
+                  chipIcon,
+                  size: 18,
+                  color: selected ? chipColor : Colors.grey[600],
+                ),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: selected ? chipColor : const Color(0xFF475569),
+                ),
+              ),
+            ],
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (chipIcon != null) ...[
-              Icon(
-                chipIcon,
-                size: 18,
-                color: selected ? chipColor : Colors.grey[600],
-              ),
-              const SizedBox(width: 8),
-            ],
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: selected ? chipColor : const Color(0xFF475569),
-              ),
-            ),
-          ],
-        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildHeaderStats({
     required int pending,
@@ -951,7 +959,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
       ),
       child: Row(
         children: [
-         
           const SizedBox(width: 12),
           _statChip(
             label: "Demande",
@@ -1047,6 +1054,7 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
     final isMission = typeKey.toLowerCase() == 'mission';
     final isSortie = typeKey.toLowerCase() == 'sortie';
     final isReclamation = typeKey.toLowerCase() == 'reclamation';
+    final isPret = typeKey.toLowerCase() == 'pret';
 
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 300 + (index * 50)),
@@ -1075,12 +1083,9 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
-            onTap: () {
-              // Add navigation to detail screen
-            },
+            onTap: () {},
             child: Stack(
               children: [
-                // Accent bar
                 Positioned(
                   left: 0,
                   top: 0,
@@ -1105,7 +1110,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Icon container with gradient
                       Container(
                         width: 48,
                         height: 48,
@@ -1134,7 +1138,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Badges row
                             Row(
                               children: [
                                 Container(
@@ -1188,7 +1191,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                               ],
                             ),
                             const SizedBox(height: 8),
-                            // Title
                             Text(
                               r.title,
                               maxLines: 2,
@@ -1202,7 +1204,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                               ),
                             ),
                             const SizedBox(height: 6),
-                            // Details
                             if (isAttestation && r.derniereDemande != null)
                               _buildInfoRow(
                                 Icons.update_rounded,
@@ -1243,6 +1244,12 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                                 ),
                             ],
                             if (isReclamation) ...[
+                              if (r.dateReclamation != null &&
+                                  r.dateReclamation!.isNotEmpty)
+                                _buildInfoRow(
+                                  Icons.calendar_today_rounded,
+                                  "Date: ${r.dateReclamation}",
+                                ),
                               if (r.typeReclamation != null &&
                                   r.typeReclamation!.isNotEmpty)
                                 _buildInfoRow(
@@ -1256,10 +1263,41 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                                   "Traitement: ${r.dateTraitement}",
                                 ),
                             ],
+                            if (isPret) ...[
+                              if (r.montantPret != null)
+                                _buildInfoRow(
+                                  Icons.attach_money_rounded,
+                                  "Montant: ${NumberFormat('#,###', 'fr_FR').format(r.montantPret)} MAD",
+                                ),
+                              if (r.dateCreationPret != null &&
+                                  r.dateCreationPret!.isNotEmpty)
+                                _buildInfoRow(
+                                  Icons.calendar_today_rounded,
+                                  "Création: ${r.dateCreationPret}",
+                                ),
+                              if (r.datePret != null && r.datePret!.isNotEmpty)
+                                _buildInfoRow(
+                                  Icons.event_available_rounded,
+                                  "Date prêt: ${r.datePret}",
+                                ),
+                              if (r.dateValidationPret != null &&
+                                  r.dateValidationPret!.isNotEmpty)
+                                _buildInfoRow(
+                                  Icons.check_circle_outline_rounded,
+                                  "Validation: ${r.dateValidationPret}",
+                                ),
+                              if (r.dateRejetPret != null &&
+                                  r.dateRejetPret!.isNotEmpty)
+                                _buildInfoRow(
+                                  Icons.cancel_outlined,
+                                  "Rejet: ${r.dateRejetPret}",
+                                ),
+                            ],
                             if (!isAttestation &&
                                 !isMission &&
                                 !isSortie &&
-                                !isReclamation)
+                                !isReclamation &&
+                                !isPret)
                               _buildInfoRow(
                                 Icons.calendar_today_rounded,
                                 range,

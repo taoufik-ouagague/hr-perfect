@@ -106,6 +106,7 @@ class _EmployeeHomeState extends State<EmployeeHome>
       ApiService.demandesSorties(),
       ApiService.missions(),
       ApiService.reclamations(),
+      ApiService.listDemandesPrets(),
     ];
 
     try {
@@ -418,7 +419,7 @@ class _EmployeeHomeState extends State<EmployeeHome>
                   ),
                   child: Row(
                     children: [
-                       const SizedBox(width: 19),
+                      const SizedBox(width: 19),
                       _statPill(
                         label: "Demande",
                         value: _pendingRequests.toString(),
@@ -426,7 +427,7 @@ class _EmployeeHomeState extends State<EmployeeHome>
                       ),
                       const SizedBox(width: 19),
                       _statPill(
-                        label: "En Cours",
+                        label: "En cours",
                         value: _encoursRequests.toString(),
                         color: const Color(0xFF42A5F5),
                       ),

@@ -1,3 +1,7 @@
+// ============================================================
+// request_model.dart - WITH PRÊT SUPPORT AND DATEDEMANDE
+// ============================================================
+
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
@@ -120,8 +124,18 @@ class Paie {
 
   String _getMonthName(int month) {
     const months = [
-      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+      'Janvier',
+      'Février',
+      'Mars',
+      'Avril',
+      'Mai',
+      'Juin',
+      'Juillet',
+      'Août',
+      'Septembre',
+      'Octobre',
+      'Novembre',
+      'Décembre',
     ];
     return months[month - 1];
   }
@@ -145,8 +159,8 @@ class PersonnesACharge {
   String sexe;
   String nom;
   String prenom;
-  
-  PersonnesACharge({  
+
+  PersonnesACharge({
     required this.dateNaissance,
     required this.dateDeclaration,
     required this.typeCharge,
@@ -245,6 +259,14 @@ class RequestModel {
   final String? derniereDemande;
   final String? dateTraitement;
   final String? typeReclamation;
+  final String? dateReclamation;
+  final DateTime? dateDemande;
+  // Prêt fields
+  final double? montantPret;
+  final String? dateCreationPret;
+  final String? datePret;
+  final String? dateValidationPret;
+  final String? dateRejetPret;
 
   RequestModel({
     required this.id,
@@ -270,6 +292,13 @@ class RequestModel {
     this.derniereDemande,
     this.dateTraitement,
     this.typeReclamation,
+    this.dateReclamation,
+    this.dateDemande,
+    this.montantPret,
+    this.dateCreationPret,
+    this.datePret,
+    this.dateValidationPret,
+    this.dateRejetPret,
   });
 
   int get createdYear => createdAt.year;
@@ -306,20 +335,20 @@ class RequestModel {
 
   static DateTime? _parseDate(String dateStr) {
     if (dateStr.isEmpty) return null;
-    
+
     String cleaned = dateStr.trim();
-    
+
     // Try ISO format with microseconds
     DateTime? parsed = DateTime.tryParse(cleaned);
     if (parsed != null) return parsed;
-    
+
     // Try ISO format without space
     if (cleaned.contains(' ') && cleaned.contains(':')) {
       final isoFormat = cleaned.replaceFirst(' ', 'T');
       parsed = DateTime.tryParse(isoFormat);
       if (parsed != null) return parsed;
     }
-    
+
     // Try dd/MM/yyyy format
     if (cleaned.contains('/')) {
       final parts = cleaned.split('/');
@@ -334,7 +363,7 @@ class RequestModel {
         }
       }
     }
-    
+
     // Try yyyy-MM-dd format
     if (cleaned.contains('-') && !cleaned.contains(':')) {
       final parts = cleaned.split('-');
@@ -349,7 +378,7 @@ class RequestModel {
         }
       }
     }
-    
+
     return null;
   }
 
@@ -391,22 +420,45 @@ class RequestModel {
     String? minRetour;
     String? dateTraitement;
     String? typeReclamation;
-    
+    String? dateReclamation;
+    double? montantPret;
+    String? dateCreationPret;
+    String? datePret;
+    String? dateValidationPret;
+    String? dateRejetPret;
+
+    // Check for prêt type (loan)
+    if (json.containsKey('montant') && json['montant'] != null) {
+      type = 'pret';
+      montantPret = (json['montant'] is int)
+          ? (json['montant'] as int).toDouble()
+          : (json['montant'] as num?)?.toDouble();
+      dateCreationPret = json['dateCreation']?.toString();
+      datePret = json['datePret']?.toString();
+      dateValidationPret = json['dateValidation']?.toString();
+      dateRejetPret = json['dateRejet']?.toString();
+    }
     // Check for réclamation type
-    if (json.containsKey('type') && json['type'] != null && json['type'].toString().isNotEmpty) {
+    else if (json.containsKey('type') &&
+        json['type'] != null &&
+        json['type'].toString().isNotEmpty) {
       final typeValue = json['type'].toString().toUpperCase();
       if (typeValue == 'ALERTE' || typeValue == 'RECLAMATION') {
         type = 'reclamation';
         dateTraitement = json['dateTraitement']?.toString();
         typeReclamation = json['type']?.toString();
+        dateReclamation = json['dateReclamation']?.toString();
       }
     }
-    
-    // Check for other types if not réclamation
+
+    // Check for other types if not prêt or réclamation
     if (type.isEmpty) {
-      if (json.containsKey('typeConge') && json['typeConge'] != null && json['typeConge'].toString().isNotEmpty) {
+      if (json.containsKey('typeConge') &&
+          json['typeConge'] != null &&
+          json['typeConge'].toString().isNotEmpty) {
         type = 'conge';
-      } else if (json.containsKey('typeAttestation') && json['typeAttestation'] != null) {
+      } else if (json.containsKey('typeAttestation') &&
+          json['typeAttestation'] != null) {
         type = 'attestation';
         derniereDemande = json['derniere_demande']?.toString();
       } else if (json.containsKey('typeSortie') && json['typeSortie'] != null) {
@@ -414,7 +466,8 @@ class RequestModel {
         heureSortieDebut = json['heureSortieDebut']?.toString();
         heureSortieFin = json['heureSortieFin']?.toString();
         dateSortie = json['dateSortie']?.toString();
-      } else if (json.containsKey('typeMission') && json['typeMission'] != null) {
+      } else if (json.containsKey('typeMission') &&
+          json['typeMission'] != null) {
         type = 'mission';
         moyenTransport = json['moyenTransport']?.toString();
         nbCheveaux = json['nbCheveaux']?.toString();
@@ -425,7 +478,8 @@ class RequestModel {
         heureRetour = json['heureRetour']?.toString();
         minRetour = json['minRetour']?.toString();
       } else {
-        if (json.containsKey('moyenTransport') || json.containsKey('designation')) {
+        if (json.containsKey('moyenTransport') ||
+            json.containsKey('designation')) {
           type = 'mission';
           moyenTransport = json['moyenTransport']?.toString();
           nbCheveaux = json['nbCheveaux']?.toString();
@@ -435,7 +489,9 @@ class RequestModel {
           dateRetour = json['dateRetour']?.toString();
           heureRetour = json['heureRetour']?.toString();
           minRetour = json['minRetour']?.toString();
-        } else if (json.containsKey('heureSortieDebut') || json.containsKey('heureSortieFin') || json.containsKey('dateSortie')) {
+        } else if (json.containsKey('heureSortieDebut') ||
+            json.containsKey('heureSortieFin') ||
+            json.containsKey('dateSortie')) {
           type = 'sortie';
           heureSortieDebut = json['heureSortieDebut']?.toString();
           heureSortieFin = json['heureSortieFin']?.toString();
@@ -451,16 +507,48 @@ class RequestModel {
 
     String title = '';
     if (type == 'mission') {
-      title = json['objet']?.toString() ?? json['designation']?.toString() ?? 'Mission';
+      title =
+          json['objet']?.toString() ??
+          json['designation']?.toString() ??
+          'Mission';
     } else if (type == 'reclamation') {
       title = json['libelle']?.toString() ?? 'Réclamation';
+    } else if (type == 'pret') {
+      title = 'Demande de prêt';
+      if (montantPret != null) {
+        title += ' - ${montantPret.toStringAsFixed(0)} MAD';
+      }
     } else {
-      title = (json['libelle'] ?? json['motif'] ?? json['objet'] ?? 'Sans titre').toString();
+      title =
+          (json['libelle'] ?? json['motif'] ?? json['objet'] ?? 'Sans titre')
+              .toString();
     }
 
-    final d1 = (json['dateDebut'] ?? json['dateDemande'] ?? json['dateSortie'] ?? json['dateDepart'] ?? json['dateReclamation'] ?? json['derniere_demande'] ?? '').toString();
-    final d2 = (json['dateFin'] ?? json['dateRetour'] ?? json['dateSortie'] ?? json['dateReclamation'] ?? json['derniere_demande'] ?? '').toString();
+    final d1 =
+        (json['dateDebut'] ??
+                json['dateDemande'] ??
+                json['dateSortie'] ??
+                json['dateDepart'] ??
+                json['dateReclamation'] ??
+                json['dateCreation'] ??
+                json['datePret'] ??
+                json['derniere_demande'] ??
+                '')
+            .toString();
+    final d2 =
+        (json['dateFin'] ??
+                json['dateRetour'] ??
+                json['dateSortie'] ??
+                json['dateReclamation'] ??
+                json['datePret'] ??
+                json['dateValidation'] ??
+                json['derniere_demande'] ??
+                '')
+            .toString();
     final yearStr = (json['annee'] ?? '2000').toString();
+
+    // Parse dateDemande from JSON
+    final dateDemande = _parseDate(json['dateDemande']?.toString() ?? '');
 
     DateTime? startDate = _parseDate(d1);
     DateTime? endDate = _parseDate(d2);
@@ -468,7 +556,9 @@ class RequestModel {
     startDate ??= DateTime(2000, 1, 1);
     endDate ??= DateTime(2000, 1, 1);
 
-    if (type == 'attestation' && derniereDemande != null && derniereDemande.isNotEmpty) {
+    if (type == 'attestation' &&
+        derniereDemande != null &&
+        derniereDemande.isNotEmpty) {
       final parsedDerniereDemande = _parseDate(derniereDemande);
       if (parsedDerniereDemande != null) {
         startDate = parsedDerniereDemande;
@@ -476,8 +566,18 @@ class RequestModel {
       }
     }
 
-    int year = int.tryParse(yearStr) ?? startDate.year;
-    DateTime createdAt = DateTime(year);
+    if (type == 'pret' &&
+        dateCreationPret != null &&
+        dateCreationPret.isNotEmpty) {
+      final parsedCreation = _parseDate(dateCreationPret);
+      if (parsedCreation != null) {
+        startDate = parsedCreation;
+        endDate = parsedCreation;
+      }
+    }
+
+    // Use dateDemande if available, otherwise use startDate for createdAt
+    DateTime createdAt = dateDemande ?? startDate;
 
     return RequestModel(
       id: _stableId(
@@ -509,6 +609,13 @@ class RequestModel {
       minRetour: minRetour,
       dateTraitement: dateTraitement,
       typeReclamation: typeReclamation,
+      dateReclamation: dateReclamation,
+      dateDemande: dateDemande,
+      montantPret: montantPret,
+      dateCreationPret: dateCreationPret,
+      datePret: datePret,
+      dateValidationPret: dateValidationPret,
+      dateRejetPret: dateRejetPret,
     );
   }
 }
