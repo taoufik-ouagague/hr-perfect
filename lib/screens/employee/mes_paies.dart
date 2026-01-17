@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:hr_perfect/models/request_model.dart';
 import 'package:hr_perfect/services/api_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -12,9 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 
 
-
 class PaieApiService {
-  
   final Logger _logger = Logger();
 
   Future<String?> _getToken() async {
@@ -56,7 +53,6 @@ class PaieApiService {
     if (token == null) throw Exception('Aucun jeton d\'authentification');
 
     try {
-      // Download PDF from API
       final response = await http.get(
         Uri.parse('${ApiService.baseUrl}?do=getPaiePdf&id=$encryptedId'),
         headers: _headers(token),
@@ -65,7 +61,6 @@ class PaieApiService {
       _logger.i('Download PDF response: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        // Request storage permission
         var status = await Permission.storage.status;
         if (!status.isGranted) {
           status = await Permission.storage.request();
@@ -74,7 +69,6 @@ class PaieApiService {
           }
         }
 
-        // Get Downloads directory
         Directory? directory;
         if (Platform.isAndroid) {
           directory = Directory('/storage/emulated/0/Download');
@@ -90,8 +84,6 @@ class PaieApiService {
         }
 
         final filePath = '${directory.path}/$filename.pdf';
-        
-        // Write PDF file
         final file = File(filePath);
         await file.writeAsBytes(response.bodyBytes);
         
@@ -104,6 +96,151 @@ class PaieApiService {
       rethrow;
     }
   }
+}
+
+// ============================================================================
+// PAIE MODEL
+// ============================================================================
+
+class Paie {
+  final String dateDebut;
+  final String dateFin;
+  final double netPaye;
+  final String encryptedId;
+  final String banque;
+  final String numCompte;
+  final String modePaie;
+
+  Paie({
+    required this.dateDebut,
+    required this.dateFin,
+    required this.netPaye,
+    required this.encryptedId,
+    required this.banque,
+    required this.numCompte,
+    required this.modePaie,
+  });
+
+  factory Paie.fromJson(Map<String, dynamic> json) {
+    return Paie(
+      dateDebut: json['dateDebut']?.toString() ?? '',
+      dateFin: json['dateFin']?.toString() ?? '',
+      netPaye: (json['netPaye'] ?? 0).toDouble(),
+      encryptedId: json['encryptedId']?.toString() ?? '',
+      banque: json['banque']?.toString() ?? '',
+      numCompte: json['numCompte']?.toString() ?? '',
+      modePaie: json['modePaie']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'dateDebut': dateDebut,
+      'dateFin': dateFin,
+      'netPaye': netPaye,
+      'encryptedId': encryptedId,
+      'banque': banque,
+      'numCompte': numCompte,
+      'modePaie': modePaie,
+    };
+  }
+
+  String get periode => '$dateDebut - $dateFin';
+
+  String get moisAnnee {
+    try {
+      final parts = dateFin.split('/');
+      if (parts.length == 3) {
+        final month = int.parse(parts[1]);
+        final year = parts[2];
+        return '${_getMonthName(month)} $year';
+      }
+    } catch (e) {
+      // Fallback
+    }
+    return dateFin;
+  }
+
+  String get formattedNetPaye => '${netPaye.toStringAsFixed(2)} MAD';
+
+  String get formattedModePaie => modePaie.replaceAll('_', ' ');
+
+  String get maskedNumCompte {
+    if (numCompte.length > 4) {
+      return '**** ${numCompte.substring(numCompte.length - 4)}';
+    }
+    return numCompte;
+  }
+
+  int get annee {
+    try {
+      final parts = dateFin.split('/');
+      if (parts.length == 3) {
+        return int.parse(parts[2]);
+      }
+    } catch (e) {
+      return DateTime.now().year;
+    }
+    return DateTime.now().year;
+  }
+
+  int get mois {
+    try {
+      final parts = dateFin.split('/');
+      if (parts.length == 3) {
+        return int.parse(parts[1]);
+      }
+    } catch (e) {
+      return DateTime.now().month;
+    }
+    return DateTime.now().month;
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+    ];
+    if (month >= 1 && month <= 12) {
+      return months[month - 1];
+    }
+    return 'Inconnu';
+  }
+
+  Paie copyWith({
+    String? dateDebut,
+    String? dateFin,
+    double? netPaye,
+    String? encryptedId,
+    String? banque,
+    String? numCompte,
+    String? modePaie,
+  }) {
+    return Paie(
+      dateDebut: dateDebut ?? this.dateDebut,
+      dateFin: dateFin ?? this.dateFin,
+      netPaye: netPaye ?? this.netPaye,
+      encryptedId: encryptedId ?? this.encryptedId,
+      banque: banque ?? this.banque,
+      numCompte: numCompte ?? this.numCompte,
+      modePaie: modePaie ?? this.modePaie,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'Paie(periode: $periode, netPaye: $formattedNetPaye, '
+           'banque: $banque, compte: $maskedNumCompte)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Paie && other.encryptedId == encryptedId;
+  }
+
+  @override
+  int get hashCode => encryptedId.hashCode;
 }
 
 // ============================================================================
@@ -123,7 +260,6 @@ class _MesPaiesPageState extends State<MesPaiesPage> with SingleTickerProviderSt
   bool _loading = true;
   String? _error;
 
-  // Animation controller
   AnimationController? _animationController;
   Animation<double>? _fadeAnimation;
 
@@ -374,7 +510,6 @@ class _MesPaiesPageState extends State<MesPaiesPage> with SingleTickerProviderSt
       ],
     );
 
-    // Wrap with fade animation
     return (_fadeAnimation != null)
         ? FadeTransition(
             opacity: _fadeAnimation!,
@@ -384,7 +519,6 @@ class _MesPaiesPageState extends State<MesPaiesPage> with SingleTickerProviderSt
   }
 
   Widget _buildHeaderCard() {
-    // Calculate total
     final total = _paies.fold<double>(0, (sum, paie) => sum + paie.netPaye);
 
     return TweenAnimationBuilder<double>(
@@ -678,7 +812,6 @@ class _PaieCard extends StatelessWidget {
   }
 
   Future<void> _handleDownload(BuildContext context, Paie paie) async {
-    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -713,10 +846,9 @@ class _PaieCard extends StatelessWidget {
       final filePath = await apiService.downloadPaiePdf(paie.encryptedId, filename);
 
       if (!context.mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
 
       if (filePath != null) {
-        // Show success snackbar
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -769,9 +901,8 @@ class _PaieCard extends StatelessWidget {
       }
     } catch (e) {
       if (!context.mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
 
-      // Show error snackbar
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(

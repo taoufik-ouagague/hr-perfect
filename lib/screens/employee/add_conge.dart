@@ -60,13 +60,13 @@ class _AddCongePageState extends State<AddCongePage>
     return '$jour/$mois/$annee';
   }
 
+  // ✅ UPDATED: Use controller method with new CongeModel
   Future<void> _soumettre() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_dateDebut == null || _dateFin == null) {
       final errorMessage = 'Veuillez sélectionner les dates de début et de fin';
       
-      // Show error snackbar only
       Get.snackbar(
         'Erreur',
         errorMessage,
@@ -87,7 +87,6 @@ class _AddCongePageState extends State<AddCongePage>
     if (result['success'] == true) {
       final backendMessage = result['message'] ?? 'Demande soumise avec succès';
 
-      // Show success snackbar only
       Get.snackbar(
         'Succès',
         backendMessage,
@@ -108,7 +107,6 @@ class _AddCongePageState extends State<AddCongePage>
     } else {
       final errorMessage = result['message'] ?? 'La soumission a échoué';
       
-      // Show error snackbar only
       Get.snackbar(
         'Erreur',
         errorMessage,

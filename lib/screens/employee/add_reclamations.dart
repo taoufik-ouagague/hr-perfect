@@ -19,7 +19,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
   final _dateReclamationController = TextEditingController();
   final _dateTraitementController = TextEditingController();
 
-  // Initialize ReclamationController
   final ReclamationController _reclamationCtrl = Get.put(ReclamationController());
 
   DateTime? _dateReclamation;
@@ -61,14 +60,11 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
     return '$jour/$mois/$annee';
   }
 
-  // ==================== SUBMIT RECLAMATION ====================
   Future<void> _soumettre() async {
-    // Validate form
     if (!_formKey.currentState!.validate()) {
       return;
     }
     
-    // Validate dates
     if (_dateReclamation == null || _dateTraitement == null) {
       _afficherMessageReponse(
         message: 'Veuillez sélectionner les dates de réclamation et de traitement',
@@ -78,7 +74,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
       return;
     }
 
-    // Call controller to add reclamation
     final result = await _reclamationCtrl.addReclamation(
       libelle: _reclamationController.text.trim(),
       dateReclamation: _dateReclamation!,
@@ -86,7 +81,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
       type: 'ALERTE',
     );
 
-    // ==================== HANDLE SUCCESS ====================
     if (result['success'] == true) {
       final backendMessage = result['message'] ?? 'Réclamation soumise avec succès';
       
@@ -99,7 +93,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
         duration: const Duration(seconds: 2),
       );
       
-      // Reset the form after successful submission
       setState(() {
         _reclamationController.clear();
         final maintenant = DateTime.now();
@@ -111,9 +104,7 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
         _couleurReponse = null;
         _iconeReponse = null;
       });
-    } 
-    // ==================== HANDLE ERROR ====================
-    else {
+    } else {
       _afficherMessageReponse(
         message: result['message'] ?? 'Échec de la soumission de la réclamation',
         couleur: Colors.red,
@@ -122,7 +113,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
     }
   }
 
-  // Display response message in form
   void _afficherMessageReponse({
     required String message,
     required Color couleur,
@@ -144,7 +134,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
     super.dispose();
   }
 
-  // ==================== BUILD DATE FIELD ====================
   Widget _buildDateField(
     TextEditingController controller,
     String label,
@@ -252,7 +241,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
             key: _formKey,
             child: Column(
               children: [
-                // Reclamation text field
                 AppTextField(
                   controller: _reclamationController,
                   label: 'Réclamation',
@@ -265,7 +253,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
                 ),
                 const SizedBox(height: 16),
                 
-                // Date reclamation field
                 _buildDateField(
                   _dateReclamationController,
                   'Date réclamation',
@@ -273,7 +260,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
                 ),
                 const SizedBox(height: 16),
                 
-                // Date traitement field
                 _buildDateField(
                   _dateTraitementController,
                   'Date traitement',
@@ -281,7 +267,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
                 ),
                 const SizedBox(height: 26),
 
-                // ==================== SUBMIT BUTTON ====================
                 Obx(() => SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -319,7 +304,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
                       ),
                     )),
 
-                // ==================== RESPONSE MESSAGE ====================
                 if (_messageReponse != null) ...[
                   const SizedBox(height: 20),
                   _buildMessageReponse(),
@@ -359,7 +343,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
     );
   }
 
-  // ==================== BUILD HEADER CARD ====================
   Widget _buildHeaderCard() {
     return Container(
       width: double.infinity,
@@ -424,7 +407,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
     );
   }
 
-  // ==================== BUILD MESSAGE RESPONSE ====================
   Widget _buildMessageReponse() {
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 400),
@@ -473,7 +455,6 @@ class _AddReclamationsPageState extends State<AddReclamationsPage>
     );
   }
 
-  // ==================== DATE PICKERS ====================
   Future<void> _choisirDateReclamation() async {
     final maintenant = DateTime.now();
     final selectionne = await showDatePicker(

@@ -57,7 +57,7 @@ class _AddPretPageState extends State<AddPretPage> with SingleTickerProviderStat
     return '$jour/$mois/$annee';
   }
 
-  // ✅ SIMPLIFIED: Use controller method
+  // ✅ UPDATED: Use controller method with PretModel integration
   Future<void> _soumettre() async {
     if (!_formKey.currentState!.validate()) return;
     

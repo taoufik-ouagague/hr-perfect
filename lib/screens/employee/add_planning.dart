@@ -255,7 +255,7 @@ class _AddPlanningPageState extends State<AddPlanningPage>
   final _clientController = TextEditingController();
   final _objetController = TextEditingController();
 
-  // ✅ CRITICAL: Initialize the PlanningController
+  // ✅ Initialize the PlanningController
   final PlanningController _planningController = Get.put(PlanningController());
 
   String? selectedTypeVisiteId;
@@ -367,7 +367,7 @@ class _AddPlanningPageState extends State<AddPlanningPage>
     return '${_formatDate(date)} ${_formatTime(time)}';
   }
 
-  // ✅ FIXED: Use correct parameter names
+  // ✅ UPDATED: Use controller method with correct parameter names
   Future<void> _savePlanning() async {
     if (!_formKey.currentState!.validate()) return;
 

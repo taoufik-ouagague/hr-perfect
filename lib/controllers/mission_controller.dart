@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:get/get.dart';
+import 'package:hr_perfect/models/mission_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hr_perfect/services/api_service.dart';
-import 'package:hr_perfect/models/request_model.dart';
 
 class MissionController extends GetxController {
   final Logger _logger = Logger();

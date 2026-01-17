@@ -379,73 +379,75 @@ class _EmployeeHomeState extends State<EmployeeHome>
             ],
           ),
           const SizedBox(height: 18),
-          _isLoadingRequests
-              ? Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 20,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Color(0xFF00C6FF),
-                      ),
-                      strokeWidth: 3,
-                    ),
-                  ),
-                )
-              : Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 20,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 19),
-                      _statPill(
-                        label: "Demande",
-                        value: _pendingRequests.toString(),
-                        color: const Color(0xFFFFA726),
-                      ),
-                      const SizedBox(width: 19),
-                      _statPill(
-                        label: "En cours",
-                        value: _encoursRequests.toString(),
-                        color: const Color(0xFF42A5F5),
-                      ),
-                      const SizedBox(width: 19),
-                      _statPill(
-                        label: "Validé",
-                        value: _approvedRequests.toString(),
-                        color: const Color(0xFF43A047),
-                      ),
-                      const SizedBox(width: 12),
-                      _statPill(
-                        label: "Rejeté",
-                        value: _rejectedRequests.toString(),
-                        color: const Color(0xFFE53935),
-                      ),
-                    ],
-                  ),
-                ),
+          // Replace the stats container section in your _dashboard method (around line 384)
+// Find this section and replace it with the code below:
+
+_isLoadingRequests
+    ? Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Color(0xFF00C6FF),
+            ),
+            strokeWidth: 3,
+          ),
+        ),
+      )
+    : Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            _statPill(
+              label: "Demande",
+              value: _pendingRequests.toString(),
+              color: const Color(0xFFFFA726),
+            ),
+            const SizedBox(width: 12),
+            _statPill(
+              label: "En cours",
+              value: _encoursRequests.toString(),
+              color: const Color(0xFF42A5F5),
+            ),
+            const SizedBox(width: 12),
+            _statPill(
+              label: "Validé",
+              value: _approvedRequests.toString(),
+              color: const Color(0xFF43A047),
+            ),
+            const SizedBox(width: 12),
+            _statPill(
+              label: "Rejeté",
+              value: _rejectedRequests.toString(),
+              color: const Color(0xFFE53935),
+            ),
+          ],
+        ),
+      ),
           const SizedBox(height: 28),
           Text(
             "Demandes rapides",

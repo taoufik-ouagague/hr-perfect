@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hr_perfect/controllers/mission_controller.dart';
-import 'package:hr_perfect/models/request_model.dart';
+import 'package:hr_perfect/models/mission_model.dart';
 import '../../widgets/app_text_field.dart';
 
-// Custom Dropdown Widget (same as before)
+// Custom Dropdown Widget
 class CustomDropdown extends StatefulWidget {
   final String label;
   final String hint;
@@ -239,7 +239,7 @@ class _AddMissionPageState extends State<AddMissionPage>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   
-  // ✅ CRITICAL: Initialize the MissionController
+  // ✅ Initialize the MissionController
   final MissionController _missionController = Get.put(MissionController());
 
   late final TextEditingController _accompagnateurController;
@@ -365,11 +365,11 @@ class _AddMissionPageState extends State<AddMissionPage>
     }
   }
 
-  // ✅ SIMPLIFIED: Use controller method
+  // ✅ UPDATED: Use controller method with MissionFormData from mission_model.dart
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Use controller's submitMission method
+    // Use MissionFormData from mission_model.dart
     final formData = MissionFormData(
       accompagnateur: _accompagnateurController.text.trim(),
       matricule: _matriculeController.text.trim(),
@@ -542,12 +542,10 @@ class _AddMissionPageState extends State<AddMissionPage>
               validator: (v) => v == null || v.trim().isEmpty ? 'Requis' : null),
             const SizedBox(height: 16),
             
-            // ✅ Fixed: Don't wrap static data in Obx
             _buildDropdown('Étranger', Icons.public, _selectedEtranger,
               _etrangerOptions, (v) => setState(() => _selectedEtranger = v!)),
             const SizedBox(height: 16),
             
-            // ✅ Use Obx only for reactive data from controller
             Obx(() {
               final transports = _missionController.moyensTransport.toList();
               return _buildDropdown('Moyen de Transport', Icons.directions_car,
@@ -560,7 +558,6 @@ class _AddMissionPageState extends State<AddMissionPage>
               validator: (v) => v == null || v.trim().isEmpty ? 'Requis' : null),
             const SizedBox(height: 16),
             
-            // ✅ Use Obx only for reactive data from controller
             Obx(() {
               final cheveaux = _missionController.nbCheveaux.toList();
               return _buildDropdown('Nb Cheveaux', Icons.speed, _selectedNbCheveaux,
@@ -572,13 +569,11 @@ class _AddMissionPageState extends State<AddMissionPage>
               validator: (v) => v == null || v.trim().isEmpty ? 'Requis' : null),
             const SizedBox(height: 16),
             
-            // ✅ Fixed: Don't wrap static data in Obx
             _buildDropdown('Carburant', Icons.local_gas_station,
               _selectedCarburant, _carburantOptions,
               (v) => setState(() => _selectedCarburant = v!)),
             const SizedBox(height: 24),
             
-            // ✅ Submit button with loading state
             Obx(() => SizedBox(
               width: double.infinity,
               child: ElevatedButton(

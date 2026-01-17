@@ -14,7 +14,7 @@ class _AddAttestationPageState extends State<AddAttestationPage>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   
-  // ✅ CRITICAL: Initialize the AttestationController
+  // ✅ Initialize the AttestationController
   final AttestationController _attestationController = Get.put(AttestationController());
 
   String? _selectedType;
@@ -56,7 +56,7 @@ class _AddAttestationPageState extends State<AddAttestationPage>
     return '$day/$month/$year';
   }
 
-  // ✅ SIMPLIFIED: Use controller method instead of manual API call
+  // ✅ UPDATED: Use controller method with new model
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;

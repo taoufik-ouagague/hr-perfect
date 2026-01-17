@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../models/request_model.dart';
+import '../../models/request_history_model.dart';
 
 class TopWaveClipper extends CustomClipper<Path> {
   @override
@@ -67,60 +67,54 @@ class StickyFilterDelegate extends SliverPersistentHeaderDelegate {
 }
 
 // Helper functions for UI
-IconData requestTypeIconByKey(String typeKey) {
-  switch (typeKey.toLowerCase()) {
-    case 'conge':
+IconData requestTypeIcon(RequestType type) {
+  switch (type) {
+    case RequestType.conge:
       return Icons.wb_sunny_outlined;
-    case 'sortie':
+    case RequestType.sortie:
       return Icons.logout_rounded;
-    case 'attestation':
+    case RequestType.attestation:
       return Icons.article_outlined;
-    case 'mission':
+    case RequestType.mission:
       return Icons.task_alt;
-    case 'reclamation':
+    case RequestType.reclamation:
       return Icons.error_outline;
-    case 'pret':
+    case RequestType.pret:
       return Icons.account_balance_wallet_outlined;
-    default:
-      return Icons.help_outline;
   }
 }
 
-String requestTypeLabelByKey(String typeKey) {
-  switch (typeKey.toLowerCase()) {
-    case 'conge':
+String requestTypeLabel(RequestType type) {
+  switch (type) {
+    case RequestType.conge:
       return 'Congé';
-    case 'sortie':
+    case RequestType.sortie:
       return 'Sortie';
-    case 'attestation':
+    case RequestType.attestation:
       return 'Attestation';
-    case 'mission':
+    case RequestType.mission:
       return 'Mission';
-    case 'reclamation':
+    case RequestType.reclamation:
       return 'Réclamation';
-    case 'pret':
+    case RequestType.pret:
       return 'Prêt';
-    default:
-      return typeKey;
   }
 }
 
-Color getTypeColor(String typeKey) {
-  switch (typeKey.toLowerCase()) {
-    case 'conge':
+Color getTypeColor(RequestType type) {
+  switch (type) {
+    case RequestType.conge:
       return const Color(0xFF3B82F6);
-    case 'attestation':
+    case RequestType.attestation:
       return const Color(0xFF10B981);
-    case 'sortie':
+    case RequestType.sortie:
       return const Color(0xFFF59E0B);
-    case 'mission':
+    case RequestType.mission:
       return const Color(0xFF8B5CF6);
-    case 'reclamation':
+    case RequestType.reclamation:
       return const Color(0xFFEF4444);
-    case 'pret':
+    case RequestType.pret:
       return const Color(0xFF06B6D4);
-    default:
-      return Colors.grey;
   }
 }
 
@@ -165,12 +159,12 @@ class RequestHistoryScreen extends StatefulWidget {
 class _RequestHistoryScreenState extends State<RequestHistoryScreen>
     with SingleTickerProviderStateMixin {
   final Logger _logger = Logger();
-  List<RequestModel> requests = [];
+  List<RequestHistoryModel> requests = [];
   bool _isLoading = true;
   final TextEditingController _searchCtrl = TextEditingController();
   String _q = '';
   RequestStatus? _statusFilter;
-  String? _typeFilter = 'conge';
+  RequestType? _typeFilter = RequestType.conge;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -256,7 +250,7 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
     }
 
     try {
-      List<RequestModel> allRequests = [];
+      List<RequestHistoryModel> allRequests = [];
 
       final responses = await Future.wait(
         apiUrls.map(
@@ -294,14 +288,14 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
             }
 
             final parsed = data
-                .map((e) => RequestModel.fromJson(e as Map<String, dynamic>))
+                .map((e) => RequestHistoryModel.fromJson(e as Map<String, dynamic>))
                 .toList();
 
             if (url.contains('reclamations') || url.contains('prets')) {
               _logger.i('${url.contains('reclamations') ? 'Réclamations' : 'Prêts'} parsed count: ${parsed.length}');
               for (var req in parsed) {
                 _logger.i(
-                  '  - Type: ${req.type}, Title: ${req.title}, Status: ${req.status}',
+                  '  - Type: ${req.requestType}, Title: ${req.title}, Status: ${req.status}',
                 );
               }
             }
@@ -348,15 +342,23 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
       }
 
       final reclamationCount = allRequests
-          .where((r) => r.type == 'reclamation')
+          .where((r) => r.requestType == RequestType.reclamation)
           .length;
-      final congeCount = allRequests.where((r) => r.type == 'conge').length;
+      final congeCount = allRequests
+          .where((r) => r.requestType == RequestType.conge)
+          .length;
       final attestationCount = allRequests
-          .where((r) => r.type == 'attestation')
+          .where((r) => r.requestType == RequestType.attestation)
           .length;
-      final sortieCount = allRequests.where((r) => r.type == 'sortie').length;
-      final missionCount = allRequests.where((r) => r.type == 'mission').length;
-      final pretCount = allRequests.where((r) => r.type == 'pret').length;
+      final sortieCount = allRequests
+          .where((r) => r.requestType == RequestType.sortie)
+          .length;
+      final missionCount = allRequests
+          .where((r) => r.requestType == RequestType.mission)
+          .length;
+      final pretCount = allRequests
+          .where((r) => r.requestType == RequestType.pret)
+          .length;
 
       _logger.i('━━━ LOADING SUMMARY ━━━');
       _logger.i('  Congés: $congeCount');
@@ -406,33 +408,28 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
     }
   }
 
-  List<RequestModel> get _visible {
-  Iterable<RequestModel> list = requests;
-  if (_typeFilter != null) {
-    list = list.where(
-      (r) => r.type.toLowerCase() == _typeFilter!.toLowerCase(),
-    );
-  }
-  if (_statusFilter != null) {
-    list = list.where((r) => r.status == _statusFilter);
-  }
-  if (_q.isNotEmpty) {
-    list = list.where((r) {
-      final hay = '${r.title} ${r.reason} ${r.type}'.toLowerCase();
-      return hay.contains(_q);
+  List<RequestHistoryModel> get _visible {
+    Iterable<RequestHistoryModel> list = requests;
+    if (_typeFilter != null) {
+      list = list.where((r) => r.requestType == _typeFilter);
+    }
+    if (_statusFilter != null) {
+      list = list.where((r) => r.status == _statusFilter);
+    }
+    if (_q.isNotEmpty) {
+      list = list.where((r) {
+        final hay = '${r.title} ${r.reason} ${r.requestType.name}'.toLowerCase();
+        return hay.contains(_q);
+      });
+    }
+    final out = list.toList();
+    out.sort((a, b) {
+      final createdAtCompare = b.createdAt.compareTo(a.createdAt);
+      if (createdAtCompare != 0) return createdAtCompare;
+      return b.startDate.compareTo(a.startDate);
     });
+    return out;
   }
-  final out = list.toList();
-  out.sort((a, b) {
-    // Sort by creation date (most recent first)
-    final createdAtCompare = b.createdAt.compareTo(a.createdAt);
-    if (createdAtCompare != 0) return createdAtCompare;
-    
-    // Then by start date (most recent first)
-    return b.startDate.compareTo(a.startDate);
-  });
-  return out;
-}
 
   @override
   Widget build(BuildContext context) {
@@ -502,7 +499,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(child: _buildAppBar()),
-
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -517,9 +513,7 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                         ),
                       ),
                     ),
-
                     SliverToBoxAdapter(child: const SizedBox(height: 16)),
-
                     SliverPersistentHeader(
                       pinned: true,
                       delegate: StickyFilterDelegate(
@@ -536,7 +530,6 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                         ),
                       ),
                     ),
-
                     if (_isLoading)
                       SliverFillRemaining(
                         child: Center(
@@ -715,55 +708,78 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
           _chip(
             "Demande",
             _statusFilter == RequestStatus.demande,
-            () => setState(
-              () => _statusFilter = _statusFilter == RequestStatus.demande
-                  ? null
-                  : RequestStatus.demande,
-            ),
+            () => setState(() {
+              if (_statusFilter == RequestStatus.demande) {
+                _statusFilter = null;
+              } else {
+                _statusFilter = RequestStatus.demande;
+                if (_typeFilter == RequestType.reclamation) {
+                  _typeFilter = RequestType.conge;
+                }
+              }
+            }),
             const Color(0xFFFFA726),
           ),
           const SizedBox(width: 10),
           _chip(
             "En cours",
             _statusFilter == RequestStatus.enCours,
-            () => setState(
-              () => _statusFilter = _statusFilter == RequestStatus.enCours
-                  ? null
-                  : RequestStatus.enCours,
-            ),
+            () => setState(() {
+              if (_statusFilter == RequestStatus.enCours) {
+                _statusFilter = null;
+              } else {
+                _statusFilter = RequestStatus.enCours;
+                _typeFilter = RequestType.reclamation;
+              }
+            }),
             const Color(0xFF42A5F5),
           ),
           const SizedBox(width: 10),
           _chip(
             "Validé",
             _statusFilter == RequestStatus.valide,
-            () => setState(
-              () => _statusFilter = _statusFilter == RequestStatus.valide
-                  ? null
-                  : RequestStatus.valide,
-            ),
+            () => setState(() {
+              if (_statusFilter == RequestStatus.valide) {
+                _statusFilter = null;
+              } else {
+                _statusFilter = RequestStatus.valide;
+                if (_typeFilter == RequestType.reclamation) {
+                  _typeFilter = RequestType.conge;
+                }
+              }
+            }),
             const Color(0xFF43A047),
           ),
           const SizedBox(width: 10),
           _chip(
             "Rejeté",
             _statusFilter == RequestStatus.rejete,
-            () => setState(
-              () => _statusFilter = _statusFilter == RequestStatus.rejete
-                  ? null
-                  : RequestStatus.rejete,
-            ),
+            () => setState(() {
+              if (_statusFilter == RequestStatus.rejete) {
+                _statusFilter = null;
+              } else {
+                _statusFilter = RequestStatus.rejete;
+                if (_typeFilter == RequestType.reclamation) {
+                  _typeFilter = RequestType.conge;
+                }
+              }
+            }),
             const Color(0xFFE53935),
           ),
           const SizedBox(width: 10),
           _chip(
             "Annulé",
             _statusFilter == RequestStatus.annule,
-            () => setState(
-              () => _statusFilter = _statusFilter == RequestStatus.annule
-                  ? null
-                  : RequestStatus.annule,
-            ),
+            () => setState(() {
+              if (_statusFilter == RequestStatus.annule) {
+                _statusFilter = null;
+              } else {
+                _statusFilter = RequestStatus.annule;
+                if (_typeFilter == RequestType.reclamation) {
+                  _typeFilter = RequestType.conge;
+                }
+              }
+            }),
             const Color(0xFF90A4AE),
           ),
         ],
@@ -778,63 +794,17 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
-          _typeChip(
-            "Congé",
-            _typeFilter == 'conge',
-            'conge',
-            () => setState(
-              () => _typeFilter = _typeFilter == 'conge' ? null : 'conge',
-            ),
-          ),
+          _typeChip("Congé", RequestType.conge),
           const SizedBox(width: 10),
-          _typeChip(
-            "Attestation",
-            _typeFilter == 'attestation',
-            'attestation',
-            () => setState(
-              () => _typeFilter = _typeFilter == 'attestation'
-                  ? null
-                  : 'attestation',
-            ),
-          ),
+          _typeChip("Attestation", RequestType.attestation),
           const SizedBox(width: 10),
-          _typeChip(
-            "Sortie",
-            _typeFilter == 'sortie',
-            'sortie',
-            () => setState(
-              () => _typeFilter = _typeFilter == 'sortie' ? null : 'sortie',
-            ),
-          ),
+          _typeChip("Sortie", RequestType.sortie),
           const SizedBox(width: 10),
-          _typeChip(
-            "Mission",
-            _typeFilter == 'mission',
-            'mission',
-            () => setState(
-              () => _typeFilter = _typeFilter == 'mission' ? null : 'mission',
-            ),
-          ),
+          _typeChip("Mission", RequestType.mission),
           const SizedBox(width: 10),
-          _typeChip(
-            "Réclamation",
-            _typeFilter == 'reclamation',
-            'reclamation',
-            () => setState(
-              () => _typeFilter = _typeFilter == 'reclamation'
-                  ? null
-                  : 'reclamation',
-            ),
-          ),
+          _typeChip("Réclamation", RequestType.reclamation),
           const SizedBox(width: 10),
-          _typeChip(
-            "Prêt",
-            _typeFilter == 'pret',
-            'pret',
-            () => setState(
-              () => _typeFilter = _typeFilter == 'pret' ? null : 'pret',
-            ),
-          ),
+          _typeChip("Prêt", RequestType.pret),
         ],
       ),
     );
@@ -871,16 +841,10 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
     );
   }
 
-  Widget _typeChip(
-    String label,
-    bool selected,
-    String? typeKey,
-    VoidCallback onTap,
-  ) {
-    Color chipColor = typeKey != null
-        ? getTypeColor(typeKey)
-        : const Color(0xFF0072FF);
-    IconData? chipIcon = typeKey != null ? requestTypeIconByKey(typeKey) : null;
+  Widget _typeChip(String label, RequestType type) {
+    final selected = _typeFilter == type;
+    final chipColor = getTypeColor(type);
+    final chipIcon = requestTypeIcon(type);
 
     return Material(
       color: selected ? chipColor.withValues(alpha: 0.12) : Colors.white,
@@ -891,11 +855,11 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
         borderRadius: BorderRadius.circular(12),
         onTap: () {
           setState(() {
-            final newTypeFilter = _typeFilter == typeKey ? null : typeKey;
+            final newTypeFilter = _typeFilter == type ? null : type;
             _typeFilter = newTypeFilter;
 
             if (newTypeFilter != null) {
-              if (typeKey == 'reclamation') {
+              if (type == RequestType.reclamation) {
                 _statusFilter = RequestStatus.enCours;
               } else {
                 _statusFilter = RequestStatus.demande;
@@ -915,14 +879,12 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (chipIcon != null) ...[
-                Icon(
-                  chipIcon,
-                  size: 18,
-                  color: selected ? chipColor : Colors.grey[600],
-                ),
-                const SizedBox(width: 8),
-              ],
+              Icon(
+                chipIcon,
+                size: 18,
+                color: selected ? chipColor : Colors.grey[600],
+              ),
+              const SizedBox(width: 8),
               Text(
                 label,
                 style: GoogleFonts.poppins(
@@ -1041,20 +1003,14 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
     );
   }
 
-  Widget _buildCard(RequestModel r, int index) {
+  Widget _buildCard(RequestHistoryModel r, int index) {
     final range =
         "${DateFormat('dd/MM').format(r.startDate)} - ${DateFormat('dd/MM').format(r.endDate)}";
     final statusCol = requestStatusColor(r.status);
-    final statusLabel = requestStatusLabel(r.status);
-    final typeKey = r.typeKey;
-    final icon = requestTypeIconByKey(typeKey);
-    final typeLabel = requestTypeLabelByKey(typeKey);
-    final typeColor = getTypeColor(typeKey);
-    final isAttestation = typeKey.toLowerCase() == 'attestation';
-    final isMission = typeKey.toLowerCase() == 'mission';
-    final isSortie = typeKey.toLowerCase() == 'sortie';
-    final isReclamation = typeKey.toLowerCase() == 'reclamation';
-    final isPret = typeKey.toLowerCase() == 'pret';
+    final statusLbl = requestStatusLabel(r.status);
+    final icon = requestTypeIcon(r.requestType);
+    final typeLabel = requestTypeLabel(r.requestType);
+    final typeColor = getTypeColor(r.requestType);
 
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 300 + (index * 50)),
@@ -1180,7 +1136,7 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                                     color: statusCol.withValues(alpha: 0.12),
                                   ),
                                   child: Text(
-                                    statusLabel,
+                                    statusLbl,
                                     style: GoogleFonts.poppins(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600,
@@ -1204,100 +1160,12 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                               ),
                             ),
                             const SizedBox(height: 6),
-                            if (isAttestation && r.derniereDemande != null)
-                              _buildInfoRow(
-                                Icons.update_rounded,
-                                "Dernière: ${r.derniereDemande}",
-                              ),
-                            if (isSortie &&
-                                ((r.dateSortie != null &&
-                                        r.dateSortie!.isNotEmpty) ||
-                                    (r.heureSortieDebut != null &&
-                                        r.heureSortieFin != null)))
-                              _buildInfoRow(
-                                Icons.event_rounded,
-                                "${r.dateSortie ?? ''} ${r.heureSortieDebut != null && r.heureSortieFin != null ? '${r.heureSortieDebut} - ${r.heureSortieFin}' : ''}"
-                                    .trim(),
-                              ),
-                            if (isMission) ...[
-                              if (r.moyenTransport != null &&
-                                  r.moyenTransport!.isNotEmpty)
-                                _buildInfoRow(
-                                  Icons.directions_car_rounded,
-                                  r.moyenTransport!,
-                                ),
-                              if (r.nbCheveaux != null &&
-                                  r.nbCheveaux!.isNotEmpty)
-                                _buildInfoRow(
-                                  Icons.speed_rounded,
-                                  r.nbCheveaux!,
-                                ),
-                              if (r.formattedMissionDepart != null)
-                                _buildInfoRow(
-                                  Icons.flight_takeoff_rounded,
-                                  "Départ: ${r.formattedMissionDepart}",
-                                ),
-                              if (r.formattedMissionRetour != null)
-                                _buildInfoRow(
-                                  Icons.flight_land_rounded,
-                                  "Retour: ${r.formattedMissionRetour}",
-                                ),
-                            ],
-                            if (isReclamation) ...[
-                              if (r.dateReclamation != null &&
-                                  r.dateReclamation!.isNotEmpty)
-                                _buildInfoRow(
-                                  Icons.calendar_today_rounded,
-                                  "Date: ${r.dateReclamation}",
-                                ),
-                              if (r.typeReclamation != null &&
-                                  r.typeReclamation!.isNotEmpty)
-                                _buildInfoRow(
-                                  Icons.category_outlined,
-                                  "Type: ${r.typeReclamation}",
-                                ),
-                              if (r.dateTraitement != null &&
-                                  r.dateTraitement!.isNotEmpty)
-                                _buildInfoRow(
-                                  Icons.schedule_rounded,
-                                  "Traitement: ${r.dateTraitement}",
-                                ),
-                            ],
-                            if (isPret) ...[
-                              if (r.montantPret != null)
-                                _buildInfoRow(
-                                  Icons.attach_money_rounded,
-                                  "Montant: ${NumberFormat('#,###', 'fr_FR').format(r.montantPret)} MAD",
-                                ),
-                              if (r.dateCreationPret != null &&
-                                  r.dateCreationPret!.isNotEmpty)
-                                _buildInfoRow(
-                                  Icons.calendar_today_rounded,
-                                  "Création: ${r.dateCreationPret}",
-                                ),
-                              if (r.datePret != null && r.datePret!.isNotEmpty)
-                                _buildInfoRow(
-                                  Icons.event_available_rounded,
-                                  "Date prêt: ${r.datePret}",
-                                ),
-                              if (r.dateValidationPret != null &&
-                                  r.dateValidationPret!.isNotEmpty)
-                                _buildInfoRow(
-                                  Icons.check_circle_outline_rounded,
-                                  "Validation: ${r.dateValidationPret}",
-                                ),
-                              if (r.dateRejetPret != null &&
-                                  r.dateRejetPret!.isNotEmpty)
-                                _buildInfoRow(
-                                  Icons.cancel_outlined,
-                                  "Rejet: ${r.dateRejetPret}",
-                                ),
-                            ],
-                            if (!isAttestation &&
-                                !isMission &&
-                                !isSortie &&
-                                !isReclamation &&
-                                !isPret)
+                            _buildTypeSpecificInfo(r),
+                            if (r.requestType != RequestType.attestation &&
+                                r.requestType != RequestType.mission &&
+                                r.requestType != RequestType.sortie &&
+                                r.requestType != RequestType.reclamation &&
+                                r.requestType != RequestType.pret)
                               _buildInfoRow(
                                 Icons.calendar_today_rounded,
                                 range,
@@ -1314,6 +1182,128 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildTypeSpecificInfo(RequestHistoryModel r) {
+    switch (r.requestType) {
+      case RequestType.attestation:
+        final details = r.attestationDetails;
+        if (details?.derniereDemande != null) {
+          return _buildInfoRow(
+            Icons.update_rounded,
+            "Dernière: ${details!.derniereDemande}",
+          );
+        }
+        return const SizedBox.shrink();
+
+      case RequestType.sortie:
+        final details = r.sortieDetails;
+        if (details != null &&
+            ((details.dateSortie != null && details.dateSortie!.isNotEmpty) ||
+                details.formattedTimeRange != null)) {
+          return _buildInfoRow(
+            Icons.event_rounded,
+            "${details.dateSortie ?? ''} ${details.formattedTimeRange ?? ''}"
+                .trim(),
+          );
+        }
+        return const SizedBox.shrink();
+
+      case RequestType.mission:
+        final details = r.missionDetails;
+        if (details == null) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (details.moyenTransport != null &&
+                details.moyenTransport!.isNotEmpty)
+              _buildInfoRow(
+                Icons.directions_car_rounded,
+                details.moyenTransport!,
+              ),
+            if (details.nbCheveaux != null && details.nbCheveaux!.isNotEmpty)
+              _buildInfoRow(
+                Icons.speed_rounded,
+                details.nbCheveaux!,
+              ),
+            if (details.formattedDepart != null)
+              _buildInfoRow(
+                Icons.flight_takeoff_rounded,
+                "Départ: ${details.formattedDepart}",
+              ),
+            if (details.formattedRetour != null)
+              _buildInfoRow(
+                Icons.flight_land_rounded,
+                "Retour: ${details.formattedRetour}",
+              ),
+          ],
+        );
+
+      case RequestType.reclamation:
+        final details = r.reclamationDetails;
+        if (details == null) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (details.dateReclamation != null &&
+                details.dateReclamation!.isNotEmpty)
+              _buildInfoRow(
+                Icons.calendar_today_rounded,
+                "Date: ${details.dateReclamation}",
+              ),
+            if (details.typeReclamation != null &&
+                details.typeReclamation!.isNotEmpty)
+              _buildInfoRow(
+                Icons.category_outlined,
+                "Type: ${details.typeReclamation}",
+              ),
+            if (details.dateTraitement != null &&
+                details.dateTraitement!.isNotEmpty)
+              _buildInfoRow(
+                Icons.schedule_rounded,
+                "Traitement: ${details.dateTraitement}",
+              ),
+          ],
+        );
+
+      case RequestType.pret:
+        final details = r.pretDetails;
+        if (details == null) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (details.montant != null)
+              _buildInfoRow(
+                Icons.attach_money_rounded,
+                "Montant: ${details.formattedMontant}",
+              ),
+            if (details.dateCreation != null && details.dateCreation!.isNotEmpty)
+              _buildInfoRow(
+                Icons.calendar_today_rounded,
+                "Création: ${details.dateCreation}",
+              ),
+            if (details.datePret != null && details.datePret!.isNotEmpty)
+              _buildInfoRow(
+                Icons.event_available_rounded,
+                "Date prêt: ${details.datePret}",
+              ),
+            if (details.dateValidation != null &&
+                details.dateValidation!.isNotEmpty)
+              _buildInfoRow(
+                Icons.check_circle_outline_rounded,
+                "Validation: ${details.dateValidation}",
+              ),
+            if (details.dateRejet != null && details.dateRejet!.isNotEmpty)
+              _buildInfoRow(
+                Icons.cancel_outlined,
+                "Rejet: ${details.dateRejet}",
+              ),
+          ],
+        );
+
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
   Widget _buildInfoRow(IconData icon, String text) {

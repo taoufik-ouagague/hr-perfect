@@ -18,7 +18,6 @@ class _AddSortiePageState extends State<AddSortiePage>
   final _motifController = TextEditingController();
   final _dateSortieController = TextEditingController();
 
-  // Use GetX controller (make sure it's registered in bindings/routes or put it here)
   final SortieController sortieController = Get.put(SortieController());
 
   DateTime? _dateSortie;
@@ -99,7 +98,6 @@ class _AddSortiePageState extends State<AddSortiePage>
       return;
     }
 
-    // Validate time range
     final start = _heureDebut!.hour * 60 + _heureDebut!.minute;
     final end = _heureFin!.hour * 60 + _heureFin!.minute;
     if (end <= start) {
@@ -152,7 +150,6 @@ class _AddSortiePageState extends State<AddSortiePage>
     }
   }
 
-  // Date field (same design)
   Widget _buildDateField(
     TextEditingController controller,
     String label,
@@ -188,12 +185,10 @@ class _AddSortiePageState extends State<AddSortiePage>
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.transparent, width: 2),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
-                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
@@ -204,8 +199,6 @@ class _AddSortiePageState extends State<AddSortiePage>
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFF00E5A0), Color(0xFF00C6FF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -251,7 +244,6 @@ class _AddSortiePageState extends State<AddSortiePage>
     );
   }
 
-  // Time field (same design)
   Widget _buildTimeField(
     String label,
     TimeOfDay? time,
@@ -318,12 +310,10 @@ class _AddSortiePageState extends State<AddSortiePage>
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.transparent, width: 2),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
-                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
@@ -334,8 +324,6 @@ class _AddSortiePageState extends State<AddSortiePage>
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFF00E5A0), Color(0xFF00C6FF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -394,191 +382,133 @@ class _AddSortiePageState extends State<AddSortiePage>
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       child: Column(
         children: [
-          TweenAnimationBuilder<double>(
-            duration: const Duration(milliseconds: 500),
-            tween: Tween(begin: 0.0, end: 1.0),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              return Transform.translate(
-                offset: Offset(0, 20 * (1 - value)),
-                child: Opacity(opacity: value, child: child),
-              );
-            },
-            child: _buildHeaderCard(),
-          ),
+          _buildHeaderCard(),
           const SizedBox(height: 22),
-          TweenAnimationBuilder<double>(
-            duration: const Duration(milliseconds: 600),
-            tween: Tween(begin: 0.0, end: 1.0),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              return Transform.translate(
-                offset: Offset(0, 30 * (1 - value)),
-                child: Opacity(opacity: value, child: child),
-              );
-            },
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  AppTextField(
-                    controller: _motifController,
-                    label: 'Motif',
-                    hint: 'Raison de la sortie',
-                    icon: Icons.notes_outlined,
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDateField(
-                    _dateSortieController,
-                    'Date de sortie',
-                    () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _dateSortie ?? DateTime.now(),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime(2100),
-                        builder: (context, child) {
-                          return TweenAnimationBuilder<double>(
-                            duration: const Duration(milliseconds: 400),
-                            tween: Tween(begin: 0.0, end: 1.0),
-                            curve: Curves.easeOutBack,
-                            builder: (context, value, _) {
-                              return BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10 * value,
-                                  sigmaY: 10 * value,
-                                ),
-                                child: Transform.translate(
-                                  offset: Offset(0, 30 * (1 - value)),
-                                  child: Transform.scale(
-                                    scale: 0.9 + (0.1 * value),
-                                    child: Opacity(
-                                      opacity: value.clamp(0.0, 1.0),
-                                      child: child!,
-                                    ),
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                AppTextField(
+                  controller: _motifController,
+                  label: 'Motif',
+                  hint: 'Raison de la sortie',
+                  icon: Icons.notes_outlined,
+                  maxLines: 3,
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Veuillez entrer un motif'
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                _buildDateField(
+                  _dateSortieController,
+                  'Date de sortie',
+                  () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _dateSortie ?? DateTime.now(),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime(2100),
+                      builder: (context, child) {
+                        return TweenAnimationBuilder<double>(
+                          duration: const Duration(milliseconds: 400),
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          curve: Curves.easeOutBack,
+                          builder: (context, value, _) {
+                            return BackdropFilter(
+                              filter: ImageFilter.blur(
+                                sigmaX: 10 * value,
+                                sigmaY: 10 * value,
+                              ),
+                              child: Transform.translate(
+                                offset: Offset(0, 30 * (1 - value)),
+                                child: Transform.scale(
+                                  scale: 0.9 + (0.1 * value),
+                                  child: Opacity(
+                                    opacity: value.clamp(0.0, 1.0),
+                                    child: child!,
                                   ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      );
-
-                      if (picked != null) {
-                        setState(() {
-                          _dateSortie = picked;
-                          _dateSortieController.text = _formatDate(picked);
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildTimeField(
-                          'Heure début',
-                          _heureDebut,
-                          (picked) => setState(() => _heureDebut = picked),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildTimeField(
-                          'Heure fin',
-                          _heureFin,
-                          (picked) => setState(() => _heureFin = picked),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 26),
-
-                  // ✅ BUTTON CONNECTED TO CONTROLLER LOADING
-                  Obx(() {
-                    final loading = sortieController.isLoading.value;
-
-                    return SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: loading ? null : _submit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00E5A0),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                        ),
-                        child: loading
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              )
-                            : Text(
-                                'Soumettre la demande',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                      ),
-                    );
-                  }),
-
-                  if (_responseMessage != null) ...[
-                    const SizedBox(height: 20),
-                    TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 400),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      curve: Curves.easeOutBack,
-                      builder: (context, value, child) {
-                        final safeOpacity = value.clamp(0.0, 1.0);
-                        final safeScale = value.clamp(0.0, 1.25);
-
-                        return Transform.scale(
-                          scale: safeScale,
-                          child: Opacity(opacity: safeOpacity, child: child),
+                            );
+                          },
                         );
                       },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 10,
-                          horizontal: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _responseColor?.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(_responseIcon, color: _responseColor),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                _responseMessage!,
-                                style: TextStyle(
-                                  color: _responseColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                    );
+
+                    if (picked != null) {
+                      setState(() {
+                        _dateSortie = picked;
+                        _dateSortieController.text = _formatDate(picked);
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTimeField(
+                        'Heure début',
+                        _heureDebut,
+                        (picked) => setState(() => _heureDebut = picked),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildTimeField(
+                        'Heure fin',
+                        _heureFin,
+                        (picked) => setState(() => _heureFin = picked),
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 26),
+
+                Obx(() {
+                  final loading = sortieController.isLoading.value;
+
+                  return SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: loading ? null : _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00E5A0),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey[300],
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                      child: loading
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              'Soumettre la demande',
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  );
+                }),
+
+                if (_responseMessage != null) ...[
+                  const SizedBox(height: 20),
+                  _buildMessageReponse(),
                 ],
-              ),
+              ],
             ),
           ),
         ],
@@ -623,8 +553,6 @@ class _AddSortiePageState extends State<AddSortiePage>
         borderRadius: BorderRadius.circular(22),
         gradient: const LinearGradient(
           colors: [Color(0xFF00E5A0), Color(0xFF00C6FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
@@ -644,7 +572,6 @@ class _AddSortiePageState extends State<AddSortiePage>
               shape: BoxShape.circle,
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.3),
-                width: 1,
               ),
             ),
             child: const Icon(
@@ -678,6 +605,54 @@ class _AddSortiePageState extends State<AddSortiePage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMessageReponse() {
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 400),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: value.clamp(0.0, 1.0),
+          child: Opacity(
+            opacity: value.clamp(0.0, 1.0),
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: _responseColor?.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _responseColor ?? Colors.transparent,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _responseIcon,
+              color: _responseColor,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _responseMessage!,
+                style: GoogleFonts.poppins(
+                  color: _responseColor,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
