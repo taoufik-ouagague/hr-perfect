@@ -47,6 +47,10 @@ class _EmployeeHomeState extends State<EmployeeHome>
   int _approvedRequests = 0;
   int _rejectedRequests = 0;
 
+  // Cache management
+  DateTime? _lastFetchTime;
+  static const _cacheDuration = Duration(minutes: 2);
+
   // Animation controller - nullable to handle hot reload
   AnimationController? _animationController;
   Animation<double>? _fadeAnimation;
@@ -56,7 +60,11 @@ class _EmployeeHomeState extends State<EmployeeHome>
   void initState() {
     super.initState();
     _initAnimations();
-    _fetchRequestCounts();
+    
+    // 🚀 Load data AFTER the first frame is rendered for instant UI
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchRequestCounts();
+    });
   }
 
   void _initAnimations() {
@@ -92,7 +100,16 @@ class _EmployeeHomeState extends State<EmployeeHome>
     return prefs.getString('token');
   }
 
-  Future<void> _fetchRequestCounts() async {
+  Future<void> _fetchRequestCounts({bool forceRefresh = false}) async {
+    // 🚀 CHECK CACHE - Avoid unnecessary refetches
+    if (!forceRefresh && 
+        _lastFetchTime != null && 
+        DateTime.now().difference(_lastFetchTime!) < _cacheDuration) {
+      _logger.i('✅ Using cached data (${DateTime.now().difference(_lastFetchTime!).inSeconds}s old)');
+      setState(() => _isLoadingRequests = false);
+      return;
+    }
+
     final token = await getToken();
     if (token == null) {
       if (!mounted) return;
@@ -110,22 +127,47 @@ class _EmployeeHomeState extends State<EmployeeHome>
     ];
 
     try {
-      List<RequestModel> allRequests = [];
+      _logger.i('🚀 Fetching from ${apiUrls.length} APIs in parallel...');
+      final startTime = DateTime.now();
 
-      for (final url in apiUrls) {
-        final response = await http.get(
+      // 🚀 PARALLEL LOADING - All requests happen simultaneously
+      final responses = await Future.wait(
+        apiUrls.map((url) => http.get(
           Uri.parse(url),
           headers: {'Content-Type': 'application/json', 'token': token},
-        );
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            _logger.w('⚠️ Timeout for $url');
+            return http.Response('[]', 408); // Return empty array on timeout
+          },
+        )),
+        eagerError: false, // Don't stop on first error
+      );
+
+      final fetchDuration = DateTime.now().difference(startTime);
+      _logger.i('⚡ All APIs fetched in ${fetchDuration.inMilliseconds}ms');
+
+      List<RequestModel> allRequests = [];
+
+      for (int i = 0; i < responses.length; i++) {
+        final response = responses[i];
+        final url = apiUrls[i];
 
         _logger.i('GET $url => ${response.statusCode}');
 
         if (response.statusCode == 200) {
-          final List<dynamic> data = jsonDecode(response.body);
-          final parsed = data
-              .map((e) => RequestModel.fromJson(e as Map<String, dynamic>))
-              .toList();
-          allRequests.addAll(parsed);
+          try {
+            final List<dynamic> data = jsonDecode(response.body);
+            final parsed = data
+                .map((e) => RequestModel.fromJson(e as Map<String, dynamic>))
+                .toList();
+            allRequests.addAll(parsed);
+          } catch (e) {
+            _logger.e('Parse error for $url: $e');
+          }
+        } else if (response.statusCode == 408) {
+          _logger.w('⚠️ Timeout for $url - skipping');
         }
       }
 
@@ -145,7 +187,10 @@ class _EmployeeHomeState extends State<EmployeeHome>
             .where((r) => r.status == RequestStatus.rejete)
             .length;
         _isLoadingRequests = false;
+        _lastFetchTime = DateTime.now(); // 🚀 Update cache timestamp
       });
+
+      _logger.i('✅ Request counts updated - Pending: $_pendingRequests, En cours: $_encoursRequests, Validé: $_approvedRequests, Rejeté: $_rejectedRequests');
     } catch (e) {
       _logger.e('Fetch error: $e');
       if (!mounted) return;
@@ -201,7 +246,6 @@ class _EmployeeHomeState extends State<EmployeeHome>
       ),
       child: Container(
         height: 72,
-
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -379,75 +423,12 @@ class _EmployeeHomeState extends State<EmployeeHome>
             ],
           ),
           const SizedBox(height: 18),
-          // Replace the stats container section in your _dashboard method (around line 384)
-// Find this section and replace it with the code below:
-
-_isLoadingRequests
-    ? Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(
-              Color(0xFF00C6FF),
-            ),
-            strokeWidth: 3,
-          ),
-        ),
-      )
-    : Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            _statPill(
-              label: "Demande",
-              value: _pendingRequests.toString(),
-              color: const Color(0xFFFFA726),
-            ),
-            const SizedBox(width: 12),
-            _statPill(
-              label: "En cours",
-              value: _encoursRequests.toString(),
-              color: const Color(0xFF42A5F5),
-            ),
-            const SizedBox(width: 12),
-            _statPill(
-              label: "Validé",
-              value: _approvedRequests.toString(),
-              color: const Color(0xFF43A047),
-            ),
-            const SizedBox(width: 12),
-            _statPill(
-              label: "Rejeté",
-              value: _rejectedRequests.toString(),
-              color: const Color(0xFFE53935),
-            ),
-          ],
-        ),
-      ),
+          
+          // 🚀 SKELETON LOADING OR STATS
+          _isLoadingRequests
+              ? _buildSkeletonStats()
+              : _buildStatsContainer(),
+          
           const SizedBox(height: 28),
           Text(
             "Demandes rapides",
@@ -605,6 +586,122 @@ _isLoadingRequests
     );
   }
 
+  // 🚀 NEW: Skeleton loading widget for better UX
+  Widget _buildSkeletonStats() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _skeletonStatPill(),
+          const SizedBox(width: 12),
+          _skeletonStatPill(),
+          const SizedBox(width: 12),
+          _skeletonStatPill(),
+          const SizedBox(width: 12),
+          _skeletonStatPill(),
+        ],
+      ),
+    );
+  }
+
+  Widget _skeletonStatPill() {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 12,
+            width: 50,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                height: 20,
+                width: 30,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🚀 NEW: Extracted stats container widget
+  Widget _buildStatsContainer() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _statPill(
+            label: "Demande",
+            value: _pendingRequests.toString(),
+            color: const Color(0xFFFFA726),
+          ),
+          const SizedBox(width: 12),
+          _statPill(
+            label: "En cours",
+            value: _encoursRequests.toString(),
+            color: const Color(0xFF42A5F5),
+          ),
+          const SizedBox(width: 12),
+          _statPill(
+            label: "Validé",
+            value: _approvedRequests.toString(),
+            color: const Color(0xFF43A047),
+          ),
+          const SizedBox(width: 12),
+          _statPill(
+            label: "Rejeté",
+            value: _rejectedRequests.toString(),
+            color: const Color(0xFFE53935),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _statPill({
     required String label,
     required String value,
@@ -688,7 +785,8 @@ _isLoadingRequests
             context,
             MaterialPageRoute(builder: (_) => screen),
           ).then((_) {
-            _fetchRequestCounts();
+            // 🚀 Force refresh when returning from adding a request
+            _fetchRequestCounts(forceRefresh: true);
           });
         },
         child: Container(
